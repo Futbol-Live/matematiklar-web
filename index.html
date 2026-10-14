@@ -4,6 +4,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700;800&family=Source+Serif+4:wght@400;600&display=swap" rel="stylesheet">
 <!-- Supabase kutubxonasini ulash -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>try{var t=localStorage.getItem("gm_theme")||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
 <link rel="stylesheet" href="css/app.css"></head><body>
 
 <!-- Login oynasi -->
@@ -19,12 +20,58 @@
 </div>
 
 <div id="offb" hidden>Oflayn rejim: mashqlar ishlayveradi, natijalar internet qaytganda yuboriladi.</div>
-<div class="top"><div class="logo" onclick="goHome()"><i>∑</i>Matematiklar<em class="lg-uz">.uz</em></div><div class="cr"><small>Created by</small><b>Osimbek Xolmamatov</b></div><div class="ov"><p id="ovt"></p><div class="bar"><i id="ovb"></i></div></div></div>
+<div class="top"><div class="logo" onclick="goHome()"><i>∑</i>Matematiklar<em class="lg-uz">.uz</em></div><div class="cr"><small>Created by</small><b>Osimbek Xolmamatov</b></div><div class="ov" style="display:flex;align-items:center;gap:12px"><div style="flex:1"><p id="ovt"></p><div class="bar"><i id="ovb"></i></div></div><button id="thbtn" class="thbtn" onclick="toggleTheme()" title="Tungi / kunduzgi rejim" aria-label="Rejimni almashtirish">🌙</button></div></div>
 <div class="wrap"><nav id="toc"></nav><article id="d"></article><aside id="rt"></aside></div>
 <div id="bk" onclick="navT(false)"></div>
 <div id="rbk" onclick="rtT(false);rkT(false)"></div>
 <aside id="rkp"></aside>
 <div id="pem" class="pem" onclick="if(event.target===this)closePE()"></div>
+<div id="tpm" class="tpm" hidden>
+ <div class="tp-w">
+  <div class="tp-h"><button class="btn g" onclick="tpClose()">← Orqaga</button><b>Ustoz paneli</b><span id="tp-role" class="tp-role"></span></div>
+  <div class="tp-g">
+   <aside class="tp-l">
+    <h3>Guruhlar</h3>
+    <form class="tp-f" onsubmit="tpCreate(event)">
+     <input id="tp-gn" maxlength="40" autocomplete="off" placeholder="Guruh nomi, masalan: 7-A">
+     <button class="btn" id="tp-gb">Yaratish</button>
+    </form>
+    <p id="tp-gm" class="tp-msg"></p>
+    <div id="tp-list"></div>
+   </aside>
+   <section class="tp-r">
+    <div id="tp-empty" class="soonbox"><b>Guruhni tanlang</b>Chapdan guruhni tanlang yoki yangisini yarating.</div>
+    <div id="tp-det" hidden>
+ <div class="tp-dh">
+  <div><h2 id="tp-gt"></h2><small id="tp-gs"></small></div>
+  <button class="btn g" onclick="tpDelGroup()">Guruhni o‘chirish</button>
+ </div>
+ <div class="tp-tabs" role="tablist">
+  <button class="on" data-t="mem" onclick="tpTab('mem')">O‘quvchilar</button>
+  <button data-t="res" onclick="tpTab('res')">Natijalar</button>
+  <button data-t="hard" onclick="tpTab('hard')">Qiyin misollar</button>
+  <button class="tp-rf" onclick="tpRefresh()" title="Yangilash" aria-label="Yangilash">↻</button>
+ </div>
+ <div id="tp-pane-mem">
+  <h3>O‘quvchi qo‘shish</h3>
+  <form class="tp-f" onsubmit="tpAdd(event)">
+   <input id="tp-lg" autocomplete="off" autocapitalize="none" placeholder="Loginlar: ali01, vali02 (bir nechta bo‘lishi mumkin)">
+   <button class="btn" id="tp-ab">Qo‘shish</button>
+  </form>
+  <p id="tp-msg" class="tp-msg"></p>
+  <h3>O‘quvchilar</h3>
+  <div id="tp-mem"></div>
+ </div>
+<div id="tp-pane-res" hidden><div id="tp-res"></div></div>
+ <div id="tp-pane-hard" hidden><div id="tp-hard"></div></div>
+</div>
+   </section>
+  </div>
+ </div>
+</div>
+
+<!-- Mana shu yerdan boshlab yangi qatorni qo'shasiz: -->
+<div id="tp-sd" class="tp-sd" hidden onclick="if(event.target===this)tpStClose()"></div>
 <nav class="mb">
  <button onclick="rtT(false);rkT(false);navT(true)"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span>Mundarija</span></button>
  <button onclick="rtT(false);rkT(false);goTo('#d')"><svg viewBox="0 0 24 24"><path d="M5 4h10a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4zM8 4v13"/></svg><span>Mavzu</span></button>
