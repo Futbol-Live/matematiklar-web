@@ -1294,7 +1294,6 @@ document.addEventListener('click', (e) => {
 });
 
 // --- USTOZ PULTI: CLAUDE DIZAYNI BILAN QULFLARNI BOSHQRISH ---
-
 async function loadLocksPanel() {
   const container = document.getElementById('tp-locks-list');
   if (!container) return;
@@ -1302,14 +1301,12 @@ async function loadLocksPanel() {
   container.innerHTML = '<p style="padding: 20px; text-align: center; color: #64748b;">Darslar ro\'yxati yuklanmoqda...</p>';
   
   try {
-    // 1. Bazadan barcha qulflar holatini o'qib kelamiz
     const { data, error } = await db.from('system_locks').select('*');
     if (error) throw error;
     
     const lockMap = {};
     data.forEach(l => lockMap[l.item_id] = l.is_open);
     
-    // 2. Claude dizaynidagi asosiy oyna (Panel)
     let html = `
       <div class="panel" style="margin: 0; max-width: 100%;">
         <header class="panel__header">
@@ -1319,24 +1316,22 @@ async function loadLocksPanel() {
         <ul class="chapters" id="chapters-list-ui">
     `;
     
-    // 3. Sizdagi CH (Boblar) massivini avtomatik aylanib HTML chizamiz
     CH.forEach((bob, c) => {
       const bobId = `chapter_${c}`;
-      // Agar bazada yo'q bo'lsa, xavfsizlik uchun yopiq (false) deb olamiz
       const isBobOpen = lockMap[bobId] === true; 
       
       let mavzularHtml = '';
       
-      // Bob ichidagi mavzularni chizamiz
       if (bob.t && bob.t.length > 0) {
         bob.t.forEach((mavzu, t) => {
-          const mavzuId = `topic_${c}_${t}`;
+          const isT = (typeof isTest === 'function' && isTest(mavzu));
+          const mavzuId = isT ? `bob_test_${c}` : `topic_${c}_${t}`;
           const isMavzuOpen = lockMap[mavzuId] === true;
           
           mavzularHtml += `
             <li class="topic">
               <span class="topic__dot"></span>
-              <span class="topic__title">${mavzu.nomi || mavzu.n || 'Mavzu ' + (t + 1)}</span>
+              <span class="topic__title">${mavzu.id ? mavzu.id + ' · ' : ''}${mavzu.t || mavzu.nomi || mavzu.n || 'Mavzu ' + (t + 1)}</span>
               <label class="switch switch--sm">
                 <input class="switch__input mavzu-lock" type="checkbox" ${isMavzuOpen ? 'checked' : ''} onchange="toggleMavzu(${c}, ${t}, this.checked)">
                 <span class="switch__track"><span class="switch__knob"><span class="lock"><i class="lock__shackle"></i><i class="lock__body"></i></span></span></span>
@@ -1379,23 +1374,21 @@ async function loadLocksPanel() {
   }
 }
 
-// 4. Bob (Katta qulf) bosilganda ishlaydigan mantiq
 async function toggleBob(c, isOpen) {
   try {
     const updates = [{ item_id: `chapter_${c}`, is_open: isOpen }];
     
-    // Agar bob ochilsa/yopilsa, ichidagi barcha mavzular ham bazada shunday bo'lishi kerak!
     if (CH[c].t) {
-      CH[c].t.forEach((_, t) => {
-        updates.push({ item_id: `topic_${c}_${t}`, is_open: isOpen });
+      CH[c].t.forEach((mavzu, t) => {
+        const isT = (typeof isTest === 'function' && isTest(mavzu));
+        const subId = isT ? `bob_test_${c}` : `topic_${c}_${t}`;
+        updates.push({ item_id: subId, is_open: isOpen });
       });
     }
 
-    // Bazaga jo'natamiz (borini yangilaydi, yo'q bo'lsa yaratadi)
     const { error } = await db.from('system_locks').upsert(updates, { onConflict: 'item_id' });
     if (error) throw error;
 
-    // UI da (Ekranda) ham barcha mayda mavzularning tugmalarini avtomat o'zgartiramiz
     const bobLi = document.getElementById(`ui-bob-${c}`);
     if (bobLi) {
       const maydaTugmalar = bobLi.querySelectorAll('.mavzu-lock');
@@ -1403,19 +1396,21 @@ async function toggleBob(c, isOpen) {
     }
     
     toastKorsat(isOpen ? "Bob va uning mavzulari ochildi 🔓" : "Bob butunlay qulflandi 🔒");
-    if (typeof locksniYuklash === 'function') locksniYuklash(); 
+    if (typeof locksniYuklash === 'function') await locksniYuklash();
+    renderSide();
   } catch (err) {
     toastKorsat("Xatolik yuz berdi!");
-    loadLocksPanel(); // Xato bo'lsa qayta yuklab to'g'irlaydi
+    loadLocksPanel();
   }
 }
 
-// 5. Mavzu (Mayda qulf) bosilganda ishlaydigan mantiq
 async function toggleMavzu(c, t, isOpen) {
   try {
-    const updates = [{ item_id: `topic_${c}_${t}`, is_open: isOpen }];
+    const mavzu = CH[c] && CH[c].t ? CH[c].t[t] : null;
+    const isT = (mavzu && typeof isTest === 'function' && isTest(mavzu));
+    const itemId = isT ? `bob_test_${c}` : `topic_${c}_${t}`;
+    const updates = [{ item_id: itemId, is_open: isOpen }];
     
-    // QOIDA: Agar aqalli bitta mavzu ochilsa, Bob ham (qisman) ochiq hisoblanishi uchun bazada Bobni yoqib qo'yamiz.
     if (isOpen) {
       updates.push({ item_id: `chapter_${c}`, is_open: true });
     }
@@ -1423,7 +1418,6 @@ async function toggleMavzu(c, t, isOpen) {
     const { error } = await db.from('system_locks').upsert(updates, { onConflict: 'item_id' });
     if (error) throw error;
     
-    // Agar mavzu ochilsa, Katta Bob tugmasini ham UI da faol qilib qo'yamiz
     if (isOpen) {
       const bobLi = document.getElementById(`ui-bob-${c}`);
       if (bobLi) {
@@ -1433,7 +1427,8 @@ async function toggleMavzu(c, t, isOpen) {
     }
 
     toastKorsat("Mavzu holati o'zgardi");
-    if (typeof locksniYuklash === 'function') locksniYuklash(); 
+    if (typeof locksniYuklash === 'function') await locksniYuklash();
+    renderSide();
   } catch (err) {
     toastKorsat("Xatolik yuz berdi!");
     loadLocksPanel();
