@@ -1,4 +1,4 @@
-let systemLocks = {};      
+window.systemLocks = {};     
 let pendingAction = null;  
 let toastTimer;
 
@@ -1440,11 +1440,14 @@ async function locksniYuklash() {
     const { data, error } = await db.from('system_locks').select('*');
     if (error) throw error;
     
-    // Barcha holatlarni xotiraga (systemLocks ga) saqlaymiz
-    systemLocks = {};
-    data.forEach(lock => {
-      systemLocks[lock.item_id] = lock.is_open;
-    });
+    window.systemLocks = {};
+    systemLocks = window.systemLocks;
+    if (data) {
+      data.forEach(lock => {
+        window.systemLocks[lock.item_id] = lock.is_open;
+      });
+    }
+    renderSide();
   } catch (err) {
     console.error("Qulflarni yuklashda xatolik:", err);
   }

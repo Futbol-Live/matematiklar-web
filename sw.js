@@ -1,7 +1,7 @@
 /* Matematiklar — oflayn ishlash uchun service worker.
    Har safar sayt fayllari o'zgarganda quyidagi V versiyasini oshiring (gm-v4 → gm-v5 ...).
    Ilova qobig'i keshlanadi; Supabase va Telegram so'rovlari hech qachon keshlanmaydi. */
-const V = 'gm-v9';
+const V = 'gm-v10';
 const SHELL = ['./', 'index.html', 'css/app.css', 'js/app.js', 'data/general-math/ch01.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png'];
 const CDN = [
   'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2',
