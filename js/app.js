@@ -161,9 +161,18 @@ const CH=NAMES.map(n=>({n,t:[]}));
 const CONTENT=[[0,"data/general-math/ch01.js"]];
 const flat=[];
 const qid=(t,s,i)=>t.id+".s"+s+".q"+(i+1);
-function buildIndex(){
- CH.forEach(c=>c.t.forEach(t=>{if(t.rules&&!t.sets)t.sets=[{n:"O‘zlashtirish uchun mashqlar",prac:t.prac}]}));
- flat.length=0;CH.forEach((c,ci)=>c.t.forEach((t,ti)=>flat.push([ci,ti])));
+function buildIndex() {
+  CH.forEach(c => c.t.forEach(t => {
+    if (t.rules && !t.sets) {
+      t.sets = [];
+      // Oddiy mashqlar uchun (Majburiy emas):
+      if (t.prac) t.sets.push({ n: "O‘zlashtirish uchun mashqlar", prac: t.prac });
+      // Yangi Uyga vazifa uchun (Majburiy qulf bilan!):
+      if (t.hw) t.sets.push({ n: "Uyga vazifa 🔒 (Majburiy: 90%)", prac: t.hw, isHw: true }); 
+    }
+  }));
+  flat.length = 0;
+  CH.forEach((c, ci) => c.t.forEach((t, ti) => flat.push([ci, ti])));
 }
 function loadScript(u){return new Promise((ok,no)=>{const s=document.createElement("script");s.src=u;s.onload=ok;s.onerror=()=>no(new Error("Yuklanmadi: "+u));document.head.appendChild(s)})}
 async function loadContent(){
@@ -250,11 +259,21 @@ function swapSet(s){
  const g2=document.getElementById("pg"+s);if(g2)g2.classList.add("swf");
  syncPractice().then(reytingYukla);
 }
+
 const save=()=>{try{localStorage.setItem(RKEY,JSON.stringify(R))}catch(e){}};
 const ready=t=>!!(t.rules||t.sets);
 const cols=Q=>Q.length>8&&Math.max(...Q.map(q=>q.length))<=20?3:2;
 const cnt=(t,s)=>(R[key(t,s)]||[]).filter(v=>v==1).length;
-const done=t=>ready(t)&&t.sets.every((st,s)=>cnt(t,s)==PQ(t,s).length);
+/* ---------- 90% PASS MANTIQI (Faqat Uyga Vazifa) ---------- */
+const HW_PASS = 90;
+const total = t => t.sets.reduce((a, st, s) => a + (st.isHw && PQ(t, s) ? PQ(t, s).length : 0), 0);
+const correct = t => t.sets.reduce((a, st, s) => a + (st.isHw ? (cnt(t, s) || 0) : 0), 0);
+const hwPct = t => {
+  const n = total(t);
+  if (n === 0) return 100; // Agar hw qo'shilmagan dars bo'lsa, qulflanmaydi
+  return Math.round((correct(t) / n) * 1000) / 10;
+};
+const done = t => ready(t) && hwPct(t) >= HW_PASS;
 
 const isTest=t=>t.type==='test'||t.t.includes('O‘zlashtirish mashqi');
 let RK={rows:[],me:null,loaded:false,noPractice:false,sort:"test"};
@@ -593,7 +612,13 @@ function render(){
  if(isTest(t)) { reytingniYuklash(t.id, 'reyting-panel'); }
 }
 
-function navHtml(){const i=flat.findIndex(f=>f[0]==cur.c&&f[1]==cur.t);return `<div class="nav"><button class="btn g" ${i<=0?"disabled":""} onclick="go(${i-1})">← Oldingi mavzu</button><button class="btn g" ${i<0||i>=flat.length-1?"disabled":""} onclick="go(${i+1})">Keyingi mavzu →</button></div>`}
+function navHtml() {
+  const i = flat.findIndex(f => f[0] == cur.c && f[1] == cur.t);
+  return `<div class="nav">
+    <button class="btn g" ${i <= 0 ? "disabled" : ""} onclick="go(${i - 1})">← Oldingi mavzu</button>
+    <button class="btn g" ${i < 0 || i >= flat.length - 1 ? "disabled" : ""} onclick="checkAndGo(this, cur.c, cur.t, ${i + 1})">Keyingi mavzu →</button>
+  </div>`;
+}
 function go(i){pick(flat[i][0],flat[i][1])}
 function tg(k){if(open==k){open=-1}else{open=k;if(!CH[k].t.length){const fh=cur.c==null;cur={c:k,t:null};P=null;hist(fh)}}render()}
 function pick(c,t) {
@@ -854,7 +879,7 @@ function tpPane(){
  const t=TP.tab,gid=TP.sel;if(!gid)return;
  
  // O'ZGARISH: ["mem","res","hard"] ro'yxatiga "locks" ni qo'shdik
- ["mem","res","hard","locks"].forEach(x=>{const p=tpE("tp-pane-"+x);if(p)p.hidden=x!==t});
+ ["mem","res","hard","locks", "hw"].forEach(x=>{const p=tpE("tp-pane-"+x);if(p)p.hidden=x!==t});
  
  document.querySelectorAll(".tp-tabs button[data-t]").forEach(b=>b.classList.toggle("on",b.dataset.t===t));
  
@@ -862,6 +887,7 @@ function tpPane(){
  if(t==="res")tpResLoad(gid);
  if(t==="hard")tpHardLoad(gid);
  if(t==="locks")loadLocksPanel(); // O'ZGARISH: Shu qator qo'shildi
+if(t==="hw")loadHomeworkPanel(gid); // BU BIZNING BUYRUQ
 }
 
 function tpRefresh(){
@@ -1455,4 +1481,112 @@ function locksniQollash() {
       if (qulf) qulf.remove();
     }
   });
+}
+/* ---------- TEKSHIRISH VA ANIMATSIYALAR ---------- */
+/* ---------- TEKSHIRISH VA ANIMATSIYALAR ---------- */
+window.checkAndGo = async function(btn, cIndex, tIndex, nextIndex) {
+  const t = CH[cIndex].t[tIndex];
+  const p = hwPct(t);
+  
+  if (p < HW_PASS) {
+    // Yiqildi - Shake animatsiyasi va qizil alert
+    btn.classList.add('hw-shake', 'hw-btn--fail');
+    if (navigator.vibrate) navigator.vibrate([60, 40, 60]);
+    
+    // Eski alertlarni tozalash
+    document.querySelectorAll('.hw-alert').forEach(e => e.remove());
+    
+    const alertDiv = document.createElement('div');
+    alertDiv.className = 'hw-alert hw-alert--bad';
+    alertDiv.innerHTML = 
+      `<span aria-hidden="true">⚠️</span>
+      <div style="flex:1">
+        <div><strong>Natija: ${p}%.</strong> Keyingi mavzuga o'tish uchun kamida ${HW_PASS}% to'plash kerak.</div>
+        <div class="hw-alert__bar" style="--w:${Math.min(p, 100)}%"><i></i><b></b></div>
+      </div>`;
+    btn.parentElement.appendChild(alertDiv);
+    
+    setTimeout(() => btn.classList.remove('hw-shake', 'hw-btn--fail'), 1600);
+    return; // Dastur shu yerda to'xtaydi, keyingi darsga o'tkazmaydi!
+  }
+  
+  // O'tdi - Yashil dizayn va bazaga saqlash
+  btn.classList.add('hw-btn--ok');
+  document.querySelectorAll('.hw-alert').forEach(e => e.remove());
+  if (typeof hwConfetti === 'function') hwConfetti();
+  if (typeof toastKorsat === 'function') toastKorsat("Ajoyib! Natija: " + p + "% 🎉");
+  
+  const oldText = btn.textContent;
+  btn.textContent = "Saqlanmoqda...";
+  
+  try {
+    const { data: userData } = await db.auth.getUser();
+    if (userData?.user) {
+      const payload = {
+        student_id: userData.user.id,
+        topic_id: t.id,
+        topic_title: t.t,
+        percent: p,
+        correct: correct(t),
+        total: total(t),
+        passed: true
+      };
+      await db.from('homework_scores').upsert(payload); 
+    }
+  } catch (err) {
+    console.error("Uy vazifani saqlashda xato:", err);
+  }
+  
+  btn.textContent = oldText;
+  
+  // Haqiqatdan ham keyingi darsga o'tkazish!
+  go(nextIndex); 
+};
+/* ---------- UYGA VAZIFA JADVALI (Ustoz paneli uchun) ---------- */
+let hwTableInstance = null; // Jadval obyektini saqlaydi
+
+/* ---------- UYGA VAZIFA JADVALI ---------- */
+async function loadHomeworkPanel(gid) {
+  const box = tpE("tp-pane-hw");
+  if (!box) return;
+  box.innerHTML = '<p class="tp-n">Yuklanmoqda…</p>';
+  
+  try {
+    const { data, error } = await db.from('homework_scores')
+      .select('percent, created_at, topic_title, profiles!inner(full_name)')
+      .order('created_at', { ascending: false })
+      .limit(50);
+      
+    if (error) throw error;
+    
+    if (!data || data.length === 0) {
+      box.innerHTML = '<p class="tp-n">Hali hech kim uy vazifasini topshirmadi.</p>';
+      return;
+    }
+
+    const rows = data.map(r => {
+      const pct = r.percent;
+      const cls = pct >= 90 ? 'g' : (pct >= 50 ? 'm' : 'b'); // yashil, sariq, qizil
+      const dt = new Date(r.created_at).toLocaleString('uz-UZ', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'});
+      
+      return `<tr>
+        <td><b>${esc(r.profiles?.full_name || "Noma'lum")}</b></td>
+        <td>${esc(r.topic_title || "")}</td>
+        <td><div class="tp-pc ${cls}">${pct}%</div></td>
+        <td><small>${dt}</small></td>
+      </tr>`;
+    }).join("");
+
+    box.innerHTML = `
+      <h3>So'nggi uyga vazifa natijalari</h3>
+      <div class="tp-tw">
+        <table class="tp-t">
+          <thead><tr><th>O‘quvchi</th><th>Mavzu</th><th>Natija</th><th>Topshirilgan vaqt</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+      
+  } catch (err) {
+    box.innerHTML = `<p class="tp-n" style="color:red;">Xatolik: ${err.message}</p>`;
+  }
 }
