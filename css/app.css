@@ -528,3 +528,484 @@ html[data-theme="dark"] .ring{background:conic-gradient(var(--ok) calc(var(--p)*
 html[data-theme="dark"] .pg div.rs.y,html[data-theme="dark"] .ar input.y,html[data-theme="dark"] .chips .y,html[data-theme="dark"] .swp-b{background:var(--okbg);border-color:var(--okbd);color:var(--oktx)}
 html[data-theme="dark"] .pg div.rs.n,html[data-theme="dark"] .ar input.n,html[data-theme="dark"] .chips .n,html[data-theme="dark"] .pr-out:hover,html[data-theme="dark"] .tp-rk{background:var(--badbg);border-color:var(--badbd);color:var(--badtx)}
 html[data-theme="dark"] .pg div.rs.s,html[data-theme="dark"] .chips .s,html[data-theme="dark"] .rk-warn,html[data-theme="dark"] #offb{background:var(--warnbg);border-color:var(--warnbd);color:var(--warntx)}
+
+[data-item-id].locked {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+[data-item-id].locked .lock-icon {
+  margin-left: 6px;
+}
+
+.lock-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translate(-50%, 20px);
+  background: #333;
+  color: #fff;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 14px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .25s, transform .25s;
+  z-index: 10000;
+}
+.lock-toast.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+/* ===== CLAUDE LOGIN OVERLAY ===== */
+#login-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  animation: overlayIn .35s ease both;
+}
+
+.login-card {
+  position: relative;
+  width: 100%;
+  max-width: 400px;
+  padding: 44px 36px 30px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: 28px;
+  box-shadow: 0 30px 80px -20px rgba(79, 70, 229, 0.45), 0 8px 24px rgba(15, 23, 42, 0.12);
+  animation: cardIn .5s cubic-bezier(.2, .9, .3, 1.2) both;
+  overflow: hidden;
+}
+
+.login-card::before {
+  content: ""; position: absolute; top: -90px; left: 50%;
+  width: 260px; height: 260px; transform: translateX(-50%);
+  background: radial-gradient(circle, rgba(124, 92, 255, .28), transparent 70%);
+  pointer-events: none;
+}
+
+.login-icon {
+  position: relative; width: 84px; height: 84px; margin: 0 auto 22px;
+  display: grid; place-items: center; border-radius: 26px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6 55%, #ec4899);
+  box-shadow: 0 14px 32px -8px rgba(99, 102, 241, .6);
+  animation: float 3.5s ease-in-out infinite;
+}
+
+.login-icon svg { width: 42px; height: 42px; }
+
+.login-title {
+  position: relative; margin: 0 0 12px; font-size: 30px; font-weight: 800;
+  letter-spacing: -.5px; background: linear-gradient(90deg, #4338ca, #7c3aed, #db2777);
+  -webkit-background-clip: text; color: transparent;
+}
+
+.login-text {
+  position: relative; margin: 0 0 30px; font-size: 15px; line-height: 1.65; color: #475569;
+}
+
+.login-btn {
+  position: relative; width: 100%; padding: 16px 24px; border: 0; border-radius: 16px;
+  font-size: 16px; font-weight: 700; letter-spacing: .3px; color: #fff;
+  cursor: pointer; overflow: hidden;
+  background: linear-gradient(120deg, #6366f1, #8b5cf6, #ec4899, #6366f1);
+  background-size: 300% 100%;
+  box-shadow: 0 10px 28px -6px rgba(124, 92, 255, .65), 0 0 0 0 rgba(139, 92, 246, .5);
+  transition: transform .2s ease, box-shadow .3s ease;
+  animation: gradientMove 6s linear infinite, pulseGlow 2.6s ease-out infinite;
+}
+
+.login-btn::after {
+  content: ""; position: absolute; top: 0; left: -80%; width: 50%; height: 100%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, .45), transparent);
+  transform: skewX(-20deg); transition: left .6s ease;
+}
+
+.login-btn:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 18px 40px -8px rgba(124, 92, 255, .8), 0 0 24px rgba(236, 72, 153, .35);
+}
+.login-btn:hover::after { left: 130%; }
+.login-btn:active { transform: translateY(0) scale(.96); }
+
+.login-btn .ripple {
+  position: absolute; border-radius: 50%; background: rgba(255, 255, 255, .55);
+  transform: scale(0); animation: ripple .6s ease-out forwards; pointer-events: none;
+}
+
+.login-close {
+  position: relative; margin-top: 18px; padding: 8px 14px; border: 0; background: none;
+  font-size: 14px; color: #94a3b8; cursor: pointer; border-radius: 8px;
+  transition: color .2s ease, background .2s ease;
+}
+.login-close:hover { color: #64748b; background: rgba(148, 163, 184, .15); }
+
+@keyframes overlayIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes cardIn { from { opacity: 0; transform: translateY(30px) scale(.92); } to { opacity: 1; transform: none; } }
+@keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+@keyframes gradientMove { 0% { background-position: 0% 50%; } 100% { background-position: 300% 50%; } }
+@keyframes pulseGlow { 0%, 100% { box-shadow: 0 10px 28px -6px rgba(124, 92, 255, .65); } 70% { box-shadow: 0 10px 28px -6px rgba(124, 92, 255, .65), 0 0 0 16px rgba(139, 92, 246, 0); } }
+@keyframes ripple { to { transform: scale(4); opacity: 0; } }
+
+/* =========================================================
+   Ustoz paneli — Lock / Unlock bo'limi
+   Qoida: checkbox belgilangan (checked) = OCHIQ, belgilanmagan = QULFLANGAN
+   ========================================================= */
+
+/* ---------- 1. Tokenlar ---------- */
+:root {
+  --bg:        #f5f6f8;
+  --surface:   #ffffff;
+  --line:      #e7e9ee;
+  --line-soft: #f0f2f5;
+  --text:      #0f172a;
+  --muted:     #64748b;
+  --faint:     #9aa4b5;
+
+  --open:        #0e9f6e;
+  --open-bg:     #e6f6ef;
+  --partial:     #c2790b;
+  --partial-bg:  #fdf2de;
+  --locked:      #64748b;
+  --locked-bg:   #eceff3;
+
+  --radius: 12px;
+  --ease: cubic-bezier(.4, 0, .2, 1);
+  --t: .28s;
+
+  font-family: Inter, "SF Pro Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+h1, h2, p, ul { margin: 0; padding: 0; }
+ul { list-style: none; }
+
+/* ---------- 2. Panel ---------- */
+.panel {
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.panel__header { margin-bottom: 20px; }
+
+.panel__title {
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -.01em;
+}
+
+.panel__subtitle {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.chapters {
+  display: grid;
+  gap: 12px;
+}
+
+/* ---------- 3. Bob (Chapter) ---------- */
+.chapter {
+  /* holat o'zgaruvchilari — quyida :has() orqali almashadi */
+  --tone:    var(--locked);
+  --tone-bg: var(--locked-bg);
+  --label:   "Yopiq";
+
+  position: relative;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 1px 2px rgb(15 23 42 / .04);
+  transition: border-color var(--t) var(--ease), box-shadow var(--t) var(--ease);
+}
+
+.chapter:hover { box-shadow: 0 4px 14px rgb(15 23 42 / .06); }
+
+/* chap tomondagi rangli indikator */
+.chapter::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--tone);
+  transition: background-color var(--t) var(--ease);
+}
+
+/* --- Bob holatlari (tartib muhim: oxirgisi ustun) --- */
+
+/* kamida bitta mavzu ochiq → qisman ochiq */
+.chapter:where(:has(.topics .switch__input:checked)) {
+  --tone: var(--partial);
+  --tone-bg: var(--partial-bg);
+  --label: "Qisman ochiq";
+}
+
+/* hamma mavzu ochiq → ochiq */
+.chapter:where(:not(:has(.topics .switch__input:not(:checked)))) {
+  --tone: var(--open);
+  --tone-bg: var(--open-bg);
+  --label: "Ochiq";
+}
+
+/* Bob o'zi qulflangan → hammasi yopiq */
+.chapter:where(:has(.chapter-lock:not(:checked))) {
+  --tone: var(--locked);
+  --tone-bg: var(--locked-bg);
+  --label: "Qulflangan";
+}
+
+/* ---------- 4. Bob sarlavhasi ---------- */
+.chapter__head {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px 12px 18px;
+}
+
+.chapter__index {
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--faint);
+  letter-spacing: .04em;
+}
+
+.chapter__title {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -.005em;
+}
+
+.chapter__meta {
+  margin-top: 1px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ---------- 5. Holat belgisi ---------- */
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--tone);
+  background: var(--tone-bg);
+  transition: color var(--t) var(--ease), background-color var(--t) var(--ease);
+}
+
+.status::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.status::after { content: var(--label); }
+
+/* ---------- 6. Mavzular (Topics) ---------- */
+.topics {
+  margin: 0 14px 12px 30px;
+  padding-left: 14px;
+  border-left: 1px solid var(--line);
+  transition: opacity var(--t) var(--ease), filter var(--t) var(--ease);
+}
+
+.topic {
+  display: grid;
+  grid-template-columns: 8px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 4px 8px 4px 10px;
+  border-radius: 8px;
+  transition: background-color .18s var(--ease), opacity var(--t) var(--ease);
+}
+
+.topic:hover { background: #f8f9fb; }
+
+.topic__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--open);
+  transition: background-color var(--t) var(--ease), transform var(--t) var(--ease);
+}
+
+.topic__title {
+  position: relative;
+  justify-self: start;
+  color: var(--text);
+  transition: color var(--t) var(--ease);
+}
+
+/* ustiga tortiladigan chiziq */
+.topic__title::after {
+  content: "";
+  position: absolute;
+  left: -2px;
+  right: -2px;
+  top: 55%;
+  height: 1px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform .4s var(--ease);
+}
+
+/* alohida yopiq mavzu */
+.topic:has(.switch__input:not(:checked)) .topic__dot {
+  background: var(--faint);
+  transform: scale(.75);
+}
+.topic:has(.switch__input:not(:checked)) .topic__title { color: var(--faint); }
+
+/* Bob qulflanganda: barcha mavzular xira, chizilgan, bosib bo'lmaydi */
+.chapter:has(.chapter-lock:not(:checked)) .topics {
+  opacity: .5;
+  filter: grayscale(1);
+}
+.chapter:has(.chapter-lock:not(:checked)) .topic { pointer-events: none; }
+.chapter:has(.chapter-lock:not(:checked)) .topic__title { color: var(--muted); }
+.chapter:has(.chapter-lock:not(:checked)) .topic__title::after { transform: scaleX(1); }
+
+/* ---------- 7. Qulf-kalit switch ---------- */
+.switch {
+  --w: 44px;
+  --h: 24px;
+  --pad: 3px;
+  --k: calc(var(--h) - var(--pad) * 2);
+
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  cursor: pointer;
+}
+
+.switch--sm {
+  --w: 38px;
+  --h: 21px;
+  --pad: 3px;
+}
+
+.switch__input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.switch__track {
+  position: relative;
+  width: var(--w);
+  height: var(--h);
+  border-radius: 999px;
+  background: #e2e6ec;
+  box-shadow: inset 0 0 0 1px rgb(15 23 42 / .06);
+  transition: background-color var(--t) var(--ease), box-shadow var(--t) var(--ease);
+}
+
+.switch__knob {
+  position: absolute;
+  top: var(--pad);
+  left: var(--pad);
+  display: grid;
+  place-items: center;
+  width: var(--k);
+  height: var(--k);
+  border-radius: 50%;
+  background: #fff;
+  color: var(--locked);
+  box-shadow: 0 1px 3px rgb(15 23 42 / .22);
+  transition: transform var(--t) var(--ease), color var(--t) var(--ease);
+}
+
+/* OCHIQ holat */
+.switch__input:checked + .switch__track { background: var(--open); }
+
+.switch__input:checked + .switch__track .switch__knob {
+  transform: translateX(calc(var(--w) - var(--k) - var(--pad) * 2));
+  color: var(--open);
+}
+
+.switch__input:hover + .switch__track { box-shadow: inset 0 0 0 1px rgb(15 23 42 / .14); }
+
+.switch__input:active + .switch__track .switch__knob { transform: scale(.94); }
+.switch__input:checked:active + .switch__track .switch__knob {
+  transform: translateX(calc(var(--w) - var(--k) - var(--pad) * 2)) scale(.94);
+}
+
+.switch__input:focus-visible + .switch__track {
+  outline: 2px solid var(--open);
+  outline-offset: 2px;
+}
+
+/* ---------- 8. Qulf ikonkasi (sof CSS) ---------- */
+.lock {
+  position: relative;
+  display: block;
+  width: 10px;
+  height: 11px;
+}
+
+.switch--sm .lock { transform: scale(.85); }
+
+.lock__body {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 6px;
+  border-radius: 1.5px;
+  background: currentColor;
+}
+
+.lock__shackle {
+  position: absolute;
+  left: 1.5px;
+  bottom: 5px;
+  width: 7px;
+  height: 5px;
+  border: 1.5px solid currentColor;
+  border-bottom: 0;
+  border-radius: 4px 4px 0 0;
+  transform-origin: 0 100%;
+  transition: transform var(--t) var(--ease);
+}
+
+/* ochilganda halqa ko'tariladi */
+.switch__input:checked + .switch__track .lock__shackle {
+  transform: translateY(-1px) rotate(-32deg);
+}
+
+/* ---------- 9. Harakatni kamaytirish ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: .01ms !important; }
+}
+
+@media (max-width: 480px) {
+  .chapter__head { grid-template-columns: 1fr auto auto; }
+  .chapter__index { display: none; }
+}

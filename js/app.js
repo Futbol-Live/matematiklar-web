@@ -1,3 +1,7 @@
+let systemLocks = {};      
+let pendingAction = null;  
+let toastTimer;
+
 // Supabase integratsiyasi
 const SUPABASE_URL = 'https://pvtzqqhnrbfqirplblgc.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_KRghPA6HgJ0grW5NW7lj5w_Jvf-ksoX';
@@ -21,10 +25,20 @@ async function holatniTekshirish() {
     const ou = offlineUser();
     if (ou) session = { user: ou };
   }
+  
+  // -- MEHMON REJIMI VA QULFLAR TO'SIG'I --
+  currentUser = session ? session.user : null;
+  hideLoginOverlay(); 
+  if (typeof locksniYuklash === 'function') await locksniYuklash(); 
+
   if (session) {
-    currentUser = session.user;
-    document.getElementById('login-overlay').style.display = 'none';
-    
+    // --- TIZIMGA KIRGANLAR UCHUN "PROFIL" TUGMASI ---
+    const btn = document.getElementById('profil-btn');
+    if (btn) {
+      btn.innerHTML = '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg><span>Profil</span>';
+      btn.setAttribute('onclick', "rtT(true,'.pr')");
+    }
+
     const { data, error: pe } = await db.from('profiles').select('full_name').eq('id', currentUser.id).single();
     if (data && data.full_name) {
       NAME = data.full_name;
@@ -49,7 +63,14 @@ async function holatniTekshirish() {
       reytingniYuklash(CH[cur.c].t[cur.t].id, 'reyting-panel');
     }
   } else {
-    document.getElementById('login-overlay').style.display = 'flex';
+    // --- MEHMONLAR UCHUN "KIRISH" TUGMASI ---
+    const btn = document.getElementById('profil-btn');
+    if (btn) {
+      btn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg><span>Kirish</span>';
+      btn.setAttribute('onclick', 'showLoginOverlay()');
+    }
+    
+    render(); 
   }
 }
 
@@ -333,17 +354,77 @@ let cur={c:null,t:null},open=0,first=true,P=null,vals=[];
 const clearP=()=>document.querySelectorAll('[id^="pr"]').forEach(e=>e.innerHTML="");
 
 function renderSide(){
- const rd=flat.map(([c,t])=>CH[c].t[t]).filter(ready),pct=Math.min(100,Math.round(rd.length/TOTAL*100));
- document.getElementById("ovt").textContent=`Kurs tayyorligi ${pct}% · ${rd.length} / ${TOTAL} mavzu`;
- document.getElementById("ovb").style.width=pct+"%";
- let h=`<div class="dh"><b>Mundarija</b><button onclick="navT(false)" aria-label="Yopish">✕</button></div>`;
- CH.forEach((c,k)=>{
-  h+=`<div class="sec ${k==open?"open":""}" style="animation-delay:${first?k*.025:0}s"><button class="sh" onclick="tg(${k})"><span class="k">${k+1}</span><span style="flex:1"><b>${c.n}</b><small>${c.t.length?c.t.length+" ta mavzu":"to‘ldirilmoqda"}</small></span><span class="cv">▶</span></button><div class="tw"><div class="tl">`;
-  if(!c.t.length)h+=`<div class="soon">Mavzular to‘ldirilmoqda…</div>`;
-  c.t.forEach((t,i)=>h+=`<button class="tp ${done(t)?"done":""} ${cur.c==k&&cur.t==i?"sel":""}" onclick="pick(${k},${i})"><span class="dot">${done(t)?"✓":t.id}</span><span>${t.t}</span></button>`);
-  h+="</div></div></div>"});
- const tc=document.getElementById("toc"),y=tc.scrollTop;tc.innerHTML=h;tc.scrollTop=y;first=false;
+  const rd=flat.map(([c,t])=>CH[c].t[t]).filter(ready),pct=Math.min(100,Math.round(rd.length/TOTAL*100));
+  document.getElementById("ovt").textContent=`Kurs tayyorligi ${pct}% · ${rd.length} / ${TOTAL} mavzu`;
+  document.getElementById("ovb").style.width=pct+"%";
+  let h=`<div class="dh"><b>Mundarija</b><button onclick="navT(false)" aria-label="Yopish">✕</button></div>`;
+
+  const ustozMi = (typeof isStaff === 'function' && isStaff());
+  window.systemLocks = window.systemLocks || {};
+
+  CH.forEach((c,k)=>{
+    const bobId = `chapter_${k}`;
+    const bobOchiq = systemLocks[bobId] === true;
+
+    // --- Bob qulfi (Claude'ning katta switch'i) ---
+    let bobQulf = '';
+    if (ustozMi) {
+      bobQulf = `
+        <label class="switch" onclick="inlineQulfniBos(event, '${bobId}')" title="Bobni ochish/yopish" style="margin-left:auto; transform: scale(0.85); transform-origin: right center; z-index: 10;">
+          <input class="switch__input" type="checkbox" ${bobOchiq ? 'checked' : ''} style="pointer-events: none;">
+          <span class="switch__track"><span class="switch__knob"><span class="lock"><i class="lock__shackle"></i><i class="lock__body"></i></span></span></span>
+        </label>
+      `;
+    } else if (!bobOchiq) {
+      bobQulf = `<span style="margin-left:auto; opacity:0.5; font-size:13px;">🔒 Yopiq</span>`;
+    }
+
+    const bobMuzlatish = (!ustozMi && !bobOchiq) ? 'opacity:0.5; pointer-events:none;' : '';
+
+    h+=`<div class="sec ${k==open?"open":""}" style="animation-delay:${first?k*.025:0}s">
+          <button class="sh" data-item-id="${bobId}" onclick="tg(${k})" style="${bobMuzlatish}; position:relative;">
+            <span class="k">${k+1}</span>
+            <span style="flex:1"><b>${c.n}</b><small>${c.t.length?c.t.length+" ta mavzu":"to‘ldirilmoqda"}</small></span>
+            ${bobQulf}
+            <span class="cv" style="${ustozMi ? 'margin-left: 10px;' : ''}">▶</span>
+          </button>
+          <div class="tw"><div class="tl">`;
+
+    if(!c.t.length) h+=`<div class="soon">Mavzular to‘ldirilmoqda…</div>`;
+
+    c.t.forEach((t,i)=>{
+      const isT = (typeof isTest === 'function' && isTest(t));
+      const mavzuId = isT ? `bob_test_${k}` : `topic_${k}_${i}`;
+      const mavzuOchiq = systemLocks[mavzuId] === true;
+
+      // --- Mavzu qulfi (Claude'ning kichik switch--sm'i) ---
+      let mavzuQulf = '';
+      if (ustozMi) {
+        mavzuQulf = `
+          <label class="switch switch--sm" onclick="inlineQulfniBos(event, '${mavzuId}')" title="Mavzuni ochish/yopish" style="margin-left:auto; z-index: 10;">
+            <input class="switch__input" type="checkbox" ${mavzuOchiq ? 'checked' : ''} style="pointer-events: none;">
+            <span class="switch__track"><span class="switch__knob"><span class="lock"><i class="lock__shackle"></i><i class="lock__body"></i></span></span></span>
+          </label>
+        `;
+      } else if (!mavzuOchiq) {
+        mavzuQulf = `<span style="margin-left:auto; opacity:0.5; font-size:12px;">🔒</span>`;
+      }
+
+      const mavzuMuzlatish = (!ustozMi && !mavzuOchiq) ? 'opacity:0.5; pointer-events:none;' : '';
+
+      h+=`<button class="tp ${done(t)?"done":""} ${cur.c==k&&cur.t==i?"sel":""}" data-item-id="${mavzuId}" onclick="pick(${k},${i})" style="display:flex; align-items:center; position:relative; ${mavzuMuzlatish}">
+            <span class="dot">${done(t)?"✓":t.id}</span>
+            <span>${t.t}</span>
+            ${mavzuQulf}
+          </button>`;
+    });
+    h+="</div></div></div>"
+  });
+
+  const tc=document.getElementById("toc"),y=tc.scrollTop; tc.innerHTML=h; tc.scrollTop=y; first=false;
 }
+
+// Ustoz qulf belgisini bosganda ishlaydigan mustaqil funksiya
 
 let NAME="";try{NAME=localStorage.getItem("gm_name")||""}catch(e){}
 const esc=s=>s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -363,12 +444,21 @@ function profileHtml(){
 }
 function renderRight(){
  let h=`<div class="rth"><b>Profil</b><button onclick="rtT(false)" aria-label="Yopish">✕</button></div>`;
- h+=currentUser?profileHtml():`<div class="stc2"><b>Avtorizatsiya</b><div class="nr"><small>Tizimga kiring...</small></div></div>`;
+ 
+ h += currentUser ? profileHtml() : `
+   <div class="stc2" style="text-align: center; padding: 30px 15px; border: none; background: transparent;">
+     <div style="background: #eff6ff; width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px; color: #3b82f6;">
+       <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+     </div>
+     <h3 style="margin: 0 0 10px; font-size: 20px; color: #1e293b;">Tizimga kirish</h3>
+     <p style="font-size: 14px; color: #64748b; line-height: 1.5; margin: 0 0 20px;">Saytdan to'liq foydalanish, mashqlarni bajarish va reytingda qatnashish uchun profilingizga kiring.</p>
+     <button onclick="showLoginOverlay(); rtT(false);" style="background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; border: none; padding: 12px 24px; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer; width: 100%; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);">Tizimga kirish ➔</button>
+   </div>`;
+   
  h+=`<div class="fc rkc"><h3>Reyting</h3><div id="rkd"></div></div>`;
  document.getElementById("rt").innerHTML=h;
  renderRk();
 }
-
 let PE={av:null};
 const peMsg=(id,txt,kind)=>{const e=document.getElementById(id);if(e){e.textContent=txt||"";e.className="pe-msg"+(kind?" "+kind:"")}};
 function peRefresh(){
@@ -509,14 +599,18 @@ function tg(k){if(open==k){open=-1}else{open=k;if(!CH[k].t.length){const fh=cur.
 function pick(c,t){if(!leaveOk())return;const fh=cur.c==null;cur={c,t};open=c;P=null;try{localStorage.setItem("gm_last",c+","+t)}catch(e){}render();hist(fh);navT(false);rtT(false);rkT(false);if(innerWidth<=860)document.getElementById("d").scrollIntoView()}
 
 function startP(s){
+  if (!loginKerak(() => startP(s))) return; // <-- Eng asosiy qorovul shu!
+
   const t=CH[cur.c].t[cur.t],k=key(t,s);
   if(!R[k])R[k]=PQ(t,s).map(()=>0);
   P={s, i:0, startTime: Date.now(), submitted: false, tools:false};
   vals=[];
   clearP();
   drawP();
-  document.getElementById("pr"+s).scrollIntoView({block:"center"});
+  const prDiv = document.getElementById("pr"+s);
+  if (prDiv) prDiv.scrollIntoView({block:"center"});
 }
+
 const qfs=l=>{const m=innerWidth<520;return l>24?(m?18:24):l>16?(m?22:30):(m?28:34)};
 const filled=v=>!!(v&&String(v).trim());
 const CHIPS=[["−","−",0],["·","·",0],["÷","÷",0],["a/b","/",0],["x²","²",0],["x³","³",0],["xⁿ","^",0],["√","√()",1],["∛","∛()",1],["( )","()",1],["π","π",0]];
@@ -729,13 +823,21 @@ const tpAgo=d=>{const n=tpDays(d);return n===Infinity?"—":n<=0?"bugun":n===1?"
 const tpDt=d=>{if(!d)return"—";const x=new Date(d);if(isNaN(x))return"—";const p=n=>String(n).padStart(2,"0");return p(x.getDate())+"."+p(x.getMonth()+1)+" "+p(x.getHours())+":"+p(x.getMinutes())};
 
 function tpTab(t){TP.tab=t;tpPane()}
+
 function tpPane(){
  const t=TP.tab,gid=TP.sel;if(!gid)return;
- ["mem","res","hard"].forEach(x=>{const p=tpE("tp-pane-"+x);if(p)p.hidden=x!==t});
+ 
+ // O'ZGARISH: ["mem","res","hard"] ro'yxatiga "locks" ni qo'shdik
+ ["mem","res","hard","locks"].forEach(x=>{const p=tpE("tp-pane-"+x);if(p)p.hidden=x!==t});
+ 
  document.querySelectorAll(".tp-tabs button[data-t]").forEach(b=>b.classList.toggle("on",b.dataset.t===t));
+ 
+ // O'quvchilar, natijalar kabi qulflarni ham yuklash buyrug'ini berdik
  if(t==="res")tpResLoad(gid);
  if(t==="hard")tpHardLoad(gid);
+ if(t==="locks")loadLocksPanel(); // O'ZGARISH: Shu qator qo'shildi
 }
+
 function tpRefresh(){
  if(!TP.sel)return;
  if(TP.tab==="mem"){tpLoad();return}
@@ -861,3 +963,459 @@ function toggleTheme() {
   syncThemeBtn();
 }
 syncThemeBtn();
+// Mehmon rejimi va Qulflar uchun yordamchi funksiyalar
+function showLoginOverlay() {
+  const overlay = document.getElementById('login-overlay');
+  if (overlay) overlay.style.display = 'flex'; 
+}
+
+function hideLoginOverlay() {
+  const overlay = document.getElementById('login-overlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
+function loginKerak(action) {
+  if (currentUser) return true;
+  pendingAction = action || null;
+  showLoginOverlay();
+  return false;
+}
+
+function toastKorsat(matn) {
+  const t = document.getElementById('lock-toast');
+  if (!t) return;
+  t.textContent = matn;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// Baza bilan bog'lanish va loginni kutish
+db.auth.onAuthStateChange((event, session) => {
+  currentUser = session ? session.user : null;
+  if (currentUser) {
+    hideLoginOverlay();
+    if (pendingAction) {           
+      const fn = pendingAction;
+      pendingAction = null;
+      fn();
+    }
+  }
+});
+
+async function locksniYuklash() {
+  const { data, error } = await db.from('system_locks').select('item_id, is_open');
+  if (error) {
+    console.error('Qulflar o\'qilmadi:', error);
+    return;                        
+  }
+  systemLocks = {};
+  if (data) {
+    data.forEach(r => { systemLocks[r.item_id] = r.is_open; });
+  }
+  locksniQollash();
+}
+
+function ochiqmi(itemId) {
+  return systemLocks[itemId] !== false;
+}
+
+// Ustoz menyudan qulfni bosganda ishlaydigan mustaqil funksiya
+// =========================================================================
+// 1. MUNDARIJANI VA CLAUDE DIZAYNIDAGI QULFLARNI CHIZUVCHI FUNKSIYA
+// =========================================================================
+function renderSide(){
+  const rd=flat.map(([c,t])=>CH[c].t[t]).filter(ready),pct=Math.min(100,Math.round(rd.length/TOTAL*100));
+  document.getElementById("ovt").textContent=`Kurs tayyorligi ${pct}% · ${rd.length} / ${TOTAL} mavzu`;
+  document.getElementById("ovb").style.width=pct+"%";
+  let h=`<div class="dh"><b>Mundarija</b><button onclick="navT(false)" aria-label="Yopish">✕</button></div>`;
+
+  const ustozMi = (typeof isStaff === 'function' && isStaff());
+  window.systemLocks = window.systemLocks || {};
+
+  CH.forEach((c,k)=>{
+    const bobId = `chapter_${k}`;
+    const bobOchiq = systemLocks[bobId] === true;
+
+    // --- Bob qulfi (Claude dizayni) ---
+    let bobQulf = '';
+    if (ustozMi) {
+      bobQulf = `
+        <label class="switch" onclick="inlineQulfniBos(event, '${bobId}')" title="${bobOchiq?'Yopish':'Ochish'}" style="margin-left:auto; transform: scale(0.85); transform-origin: right center; z-index: 10;">
+          <input class="switch__input" type="checkbox" ${bobOchiq ? 'checked' : ''} style="pointer-events: none;">
+          <span class="switch__track"><span class="switch__knob"><span class="lock"><i class="lock__shackle"></i><i class="lock__body"></i></span></span></span>
+        </label>
+      `;
+    } else if (!bobOchiq) {
+      bobQulf = `<span style="margin-left:auto; opacity:0.5; font-size:13px;">🔒 Yopiq</span>`;
+    }
+
+    const bobMuzlatish = (!ustozMi && !bobOchiq) ? 'opacity:0.5; pointer-events:none;' : '';
+
+    h+=`<div class="sec ${k==open?"open":""}" style="animation-delay:${first?k*.025:0}s">
+          <button class="sh" data-item-id="${bobId}" onclick="tg(${k})" style="${bobMuzlatish}; position:relative;">
+            <span class="k">${k+1}</span>
+            <span style="flex:1"><b>${c.n}</b><small>${c.t.length?c.t.length+" ta mavzu":"to‘ldirilmoqda"}</small></span>
+            ${bobQulf}
+            <span class="cv" style="${ustozMi ? 'margin-left: 10px;' : ''}">▶</span>
+          </button>
+          <div class="tw"><div class="tl">`;
+
+    if(!c.t.length) h+=`<div class="soon">Mavzular to‘ldirilmoqda…</div>`;
+
+    c.t.forEach((t,i)=>{
+      const isT = (typeof isTest === 'function' && isTest(t));
+      const mavzuId = isT ? `bob_test_${k}` : `topic_${k}_${i}`;
+      const mavzuOchiq = systemLocks[mavzuId] === true;
+
+      // --- Mavzu qulfi (Claude dizayni kichik) ---
+      let mavzuQulf = '';
+      if (ustozMi) {
+        mavzuQulf = `
+          <label class="switch switch--sm" onclick="inlineQulfniBos(event, '${mavzuId}')" title="${mavzuOchiq?'Yopish':'Ochish'}" style="margin-left:auto; z-index: 10;">
+            <input class="switch__input" type="checkbox" ${mavzuOchiq ? 'checked' : ''} style="pointer-events: none;">
+            <span class="switch__track"><span class="switch__knob"><span class="lock"><i class="lock__shackle"></i><i class="lock__body"></i></span></span></span>
+          </label>
+        `;
+      } else if (!mavzuOchiq) {
+        mavzuQulf = `<span style="margin-left:auto; opacity:0.5; font-size:12px;">🔒</span>`;
+      }
+
+      const mavzuMuzlatish = (!ustozMi && !mavzuOchiq) ? 'opacity:0.5; pointer-events:none;' : '';
+
+      h+=`<button class="tp ${done(t)?"done":""} ${cur.c==k&&cur.t==i?"sel":""}" data-item-id="${mavzuId}" onclick="pick(${k},${i})" style="display:flex; align-items:center; position:relative; ${mavzuMuzlatish}">
+            <span class="dot">${done(t)?"✓":t.id}</span>
+            <span>${t.t}</span>
+            ${mavzuQulf}
+          </button>`;
+    });
+    h+="</div></div></div>"
+  });
+
+  const tc=document.getElementById("toc"),y=tc.scrollTop; tc.innerHTML=h; tc.scrollTop=y; first=false;
+}
+
+// =========================================================================
+// 2. QULFLARNI Milt etmasdan (Flicker-free) SAQLAYDIGAN MANTIQ
+// =========================================================================
+window.inlineQulfniBos = function(e, itemId) {
+  e.preventDefault();
+  e.stopPropagation(); // "Mavzuga kirish" tugmasi tasodifan bosilib ketmasligi uchun
+
+  const label = e.currentTarget;
+  const input = label.querySelector('.switch__input');
+  if (!input) return;
+
+  const yangiHolat = !input.checked;
+
+  // 1. Vizual animatsiyani darhol ishga tushiramiz (kutib turmaydi!)
+  input.checked = yangiHolat;
+  window.systemLocks[itemId] = yangiHolat;
+
+  let updates = [{ item_id: itemId, is_open: yangiHolat }];
+
+  // 2. Katta Bob yopilsa -> Ichidagi hamma mayda tugmalarni ham vizual yopamiz
+  if (itemId.startsWith('chapter_')) {
+    const k = parseInt(itemId.replace('chapter_', ''));
+    const sec = label.closest('.sec');
+    if (sec) {
+       sec.querySelectorAll('.tp .switch__input').forEach(inp => inp.checked = yangiHolat);
+    }
+    
+    if (CH[k] && CH[k].t) {
+      CH[k].t.forEach((t, i) => {
+        const isT = (typeof isTest === 'function' && isTest(t));
+        const subId = isT ? `bob_test_${k}` : `topic_${k}_${i}`;
+        updates.push({ item_id: subId, is_open: yangiHolat });
+        window.systemLocks[subId] = yangiHolat;
+      });
+    }
+  }
+
+  // 3. Mayda Mavzu ochilsa -> Katta Bob qulfini ham vizual ochib qo'yamiz
+  if (yangiHolat === true && (itemId.startsWith('topic_') || itemId.startsWith('bob_test_'))) {
+     const sec = label.closest('.sec');
+     if (sec) {
+        const bobSwitch = sec.querySelector('.sh .switch__input');
+        if (bobSwitch) bobSwitch.checked = true;
+     }
+     let num = itemId.startsWith('bob_test_') ? itemId.replace('bob_test_', '') : itemId.split('_')[1];
+     updates.push({ item_id: `chapter_${num}`, is_open: true });
+     window.systemLocks[`chapter_${num}`] = true;
+  }
+
+  // 4. Bazaga fonga xotirjam yozib qo'yaveradi (Menyuni qayta chizmaydi, shuning uchun qotmaydi)
+  db.from('system_locks').upsert(updates, { onConflict: 'item_id' })
+    .then(({error}) => { if (error) console.error("Qulfni saqlashda xato", error); });
+};
+
+
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-item-id]');
+  
+  // QOIDA: Agar element yo'q bo'lsa Yoki dars OCHIQ bo'lsa Yoki bosayotgan odam USTOZ bo'lsa -> indama, o'tkazib yubor!
+  if (!el || ochiqmi(el.dataset.itemId) || (typeof isStaff === 'function' && isStaff())) return;
+  
+  e.preventDefault();
+  e.stopPropagation();
+  const id = el.dataset.itemId;
+  toastKorsat(id.startsWith('bob_test')
+    ? 'Bu bob testi ustoz tomonidan qulflangan'
+    : 'Bu bob ustoz tomonidan qulflangan');
+}, true);
+
+// Sehrli tugma bosilganda to'lqin (ripple) effekti
+document.addEventListener('click', function (e) {
+  const btn = e.target.closest('#login-btn');
+  if (!btn) return;
+  const r = btn.getBoundingClientRect();
+  const size = Math.max(r.width, r.height);
+  const span = document.createElement('span');
+  span.className = 'ripple';
+  span.style.width = span.style.height = size + 'px';
+  span.style.left = (e.clientX - r.left - size / 2) + 'px';
+  span.style.top  = (e.clientY - r.top  - size / 2) + 'px';
+  btn.appendChild(span);
+  setTimeout(() => span.remove(), 650);
+});
+// Supabase orqali tizimga kirish funksiyasi
+async function kirishniBajarish(btn) {
+  const email = document.getElementById('log-email').value.trim();
+  const pass = document.getElementById('log-pass').value;
+
+  if (!email || !pass) {
+    toastKorsat("Iltimos, email va parolni to'liq kiriting");
+    return;
+  }
+
+  // Tugma holatini o'zgartirish (yuklanish jarayoni)
+  const oldText = btn.innerHTML;
+  btn.innerHTML = "Kirilmoqda...";
+  btn.style.opacity = "0.7";
+  btn.style.pointerEvents = "none";
+
+  // Supabase dan tekshirish
+  const { data, error } = await db.auth.signInWithPassword({
+    email: email,
+    password: pass
+  });
+
+  if (error) {
+    toastKorsat("Xatolik: Email yoki parol noto'g'ri");
+    btn.innerHTML = oldText;
+    btn.style.opacity = "1";
+    btn.style.pointerEvents = "auto";
+  } else {
+    // Muvaffaqiyatli kirilsa
+    toastKorsat("Tizimga muvaffaqiyatli kirdingiz!");
+    document.getElementById('log-email').value = '';
+    document.getElementById('log-pass').value = '';
+    
+    // Tugmani asl holiga qaytarib oynani yopamiz va ma'lumotlarni yangilaymiz
+    btn.innerHTML = oldText;
+    btn.style.opacity = "1";
+    btn.style.pointerEvents = "auto";
+    
+    hideLoginOverlay();
+    
+    // Mehmon rejimini o'chirib, o'quvchi (profil) rejimini yuklash
+    await holatniTekshirish();
+  }
+}
+// --- USTOZ PULTI: QULFLARNI BOSHQRISH ---
+
+// Qulflar bo'limi bosilganda pultni yuklash
+document.addEventListener('click', (e) => {
+  const t = e.target.closest('[data-t="locks"]');
+  if (t) loadLocksPanel();
+});
+
+// --- USTOZ PULTI: CLAUDE DIZAYNI BILAN QULFLARNI BOSHQRISH ---
+
+async function loadLocksPanel() {
+  const container = document.getElementById('tp-locks-list');
+  if (!container) return;
+  
+  container.innerHTML = '<p style="padding: 20px; text-align: center; color: #64748b;">Darslar ro\'yxati yuklanmoqda...</p>';
+  
+  try {
+    // 1. Bazadan barcha qulflar holatini o'qib kelamiz
+    const { data, error } = await db.from('system_locks').select('*');
+    if (error) throw error;
+    
+    const lockMap = {};
+    data.forEach(l => lockMap[l.item_id] = l.is_open);
+    
+    // 2. Claude dizaynidagi asosiy oyna (Panel)
+    let html = `
+      <div class="panel" style="margin: 0; max-width: 100%;">
+        <header class="panel__header">
+          <h1 class="panel__title">Darslar kirish nazorati</h1>
+          <p class="panel__subtitle">Bob yoki mavzuni qulflang — o'quvchilar uchun ochiq/yopiq holati shu yerda belgilanadi.</p>
+        </header>
+        <ul class="chapters" id="chapters-list-ui">
+    `;
+    
+    // 3. Sizdagi CH (Boblar) massivini avtomatik aylanib HTML chizamiz
+    CH.forEach((bob, c) => {
+      const bobId = `chapter_${c}`;
+      // Agar bazada yo'q bo'lsa, xavfsizlik uchun yopiq (false) deb olamiz
+      const isBobOpen = lockMap[bobId] === true; 
+      
+      let mavzularHtml = '';
+      
+      // Bob ichidagi mavzularni chizamiz
+      if (bob.t && bob.t.length > 0) {
+        bob.t.forEach((mavzu, t) => {
+          const mavzuId = `topic_${c}_${t}`;
+          const isMavzuOpen = lockMap[mavzuId] === true;
+          
+          mavzularHtml += `
+            <li class="topic">
+              <span class="topic__dot"></span>
+              <span class="topic__title">${mavzu.nomi || mavzu.n || 'Mavzu ' + (t + 1)}</span>
+              <label class="switch switch--sm">
+                <input class="switch__input mavzu-lock" type="checkbox" ${isMavzuOpen ? 'checked' : ''} onchange="toggleMavzu(${c}, ${t}, this.checked)">
+                <span class="switch__track"><span class="switch__knob"><span class="lock"><i class="lock__shackle"></i><i class="lock__body"></i></span></span></span>
+              </label>
+            </li>
+          `;
+        });
+      }
+
+      html += `
+        <li class="chapter" id="ui-bob-${c}">
+          <div class="chapter__head">
+            <span class="chapter__index">${String(c + 1).padStart(2, '0')}</span>
+            <div class="chapter__info">
+              <h2 class="chapter__title">${bob.nomi || bob.n || 'Bob ' + (c + 1)}</h2>
+              <p class="chapter__meta">${bob.t ? bob.t.length : 0} ta mavzu</p>
+            </div>
+            <span class="status" aria-live="polite"></span>
+            <label class="switch" title="Bobni qulflash / ochish">
+              <input class="switch__input chapter-lock" type="checkbox" ${isBobOpen ? 'checked' : ''} onchange="toggleBob(${c}, this.checked)">
+              <span class="switch__track">
+                <span class="switch__knob">
+                  <span class="lock"><i class="lock__shackle"></i><i class="lock__body"></i></span>
+                </span>
+              </span>
+            </label>
+          </div>
+          <ul class="topics">
+            ${mavzularHtml}
+          </ul>
+        </li>
+      `;
+    });
+    
+    html += '</ul></div>';
+    container.innerHTML = html;
+    
+  } catch (err) {
+    container.innerHTML = `<p style="color: red; padding: 20px;">Xatolik: ${err.message}</p>`;
+  }
+}
+
+// 4. Bob (Katta qulf) bosilganda ishlaydigan mantiq
+async function toggleBob(c, isOpen) {
+  try {
+    const updates = [{ item_id: `chapter_${c}`, is_open: isOpen }];
+    
+    // Agar bob ochilsa/yopilsa, ichidagi barcha mavzular ham bazada shunday bo'lishi kerak!
+    if (CH[c].t) {
+      CH[c].t.forEach((_, t) => {
+        updates.push({ item_id: `topic_${c}_${t}`, is_open: isOpen });
+      });
+    }
+
+    // Bazaga jo'natamiz (borini yangilaydi, yo'q bo'lsa yaratadi)
+    const { error } = await db.from('system_locks').upsert(updates, { onConflict: 'item_id' });
+    if (error) throw error;
+
+    // UI da (Ekranda) ham barcha mayda mavzularning tugmalarini avtomat o'zgartiramiz
+    const bobLi = document.getElementById(`ui-bob-${c}`);
+    if (bobLi) {
+      const maydaTugmalar = bobLi.querySelectorAll('.mavzu-lock');
+      maydaTugmalar.forEach(btn => btn.checked = isOpen);
+    }
+    
+    toastKorsat(isOpen ? "Bob va uning mavzulari ochildi 🔓" : "Bob butunlay qulflandi 🔒");
+    if (typeof locksniYuklash === 'function') locksniYuklash(); 
+  } catch (err) {
+    toastKorsat("Xatolik yuz berdi!");
+    loadLocksPanel(); // Xato bo'lsa qayta yuklab to'g'irlaydi
+  }
+}
+
+// 5. Mavzu (Mayda qulf) bosilganda ishlaydigan mantiq
+async function toggleMavzu(c, t, isOpen) {
+  try {
+    const updates = [{ item_id: `topic_${c}_${t}`, is_open: isOpen }];
+    
+    // QOIDA: Agar aqalli bitta mavzu ochilsa, Bob ham (qisman) ochiq hisoblanishi uchun bazada Bobni yoqib qo'yamiz.
+    if (isOpen) {
+      updates.push({ item_id: `chapter_${c}`, is_open: true });
+    }
+
+    const { error } = await db.from('system_locks').upsert(updates, { onConflict: 'item_id' });
+    if (error) throw error;
+    
+    // Agar mavzu ochilsa, Katta Bob tugmasini ham UI da faol qilib qo'yamiz
+    if (isOpen) {
+      const bobLi = document.getElementById(`ui-bob-${c}`);
+      if (bobLi) {
+         const kattaTugma = bobLi.querySelector('.chapter-lock');
+         if (kattaTugma) kattaTugma.checked = true;
+      }
+    }
+
+    toastKorsat("Mavzu holati o'zgardi");
+    if (typeof locksniYuklash === 'function') locksniYuklash(); 
+  } catch (err) {
+    toastKorsat("Xatolik yuz berdi!");
+    loadLocksPanel();
+  }
+}
+// 1. Saytga kirganda bazadan qaysi boblar ochiq/yopiqligini o'qib kelish
+async function locksniYuklash() {
+  try {
+    const { data, error } = await db.from('system_locks').select('*');
+    if (error) throw error;
+    
+    // Barcha holatlarni xotiraga (systemLocks ga) saqlaymiz
+    systemLocks = {};
+    data.forEach(lock => {
+      systemLocks[lock.item_id] = lock.is_open;
+    });
+  } catch (err) {
+    console.error("Qulflarni yuklashda xatolik:", err);
+  }
+}
+
+// 2. Mundarija chizilganda yopiq boblarga 🔒 osib qo'yish
+function locksniQollash() {
+  const items = document.querySelectorAll('[data-item-id]');
+  
+  items.forEach(el => {
+    const itemId = el.getAttribute('data-item-id');
+    // Agar bazada bu bob ochiq bo'lsa (true), demak ochiq. Yo'qsa - yopiq (false).
+    const isOpen = systemLocks[itemId] === true; 
+    
+    if (!isOpen) {
+      // Yopiq bo'lsa - xiralashtiramiz, bosib bo'lmaydigan qilamiz va 🔒 qo'shamiz
+      el.style.opacity = '0.5';
+      el.style.pointerEvents = 'none'; // Tugmani butunlay o'chiradi
+      
+      if (!el.querySelector('.qulf-belgisi')) {
+        el.innerHTML += '<span class="qulf-belgisi" style="margin-left: auto;">🔒</span>';
+      }
+    } else {
+      // Ochiq bo'lsa - yorqin qilamiz va qulfni olib tashlaymiz
+      el.style.opacity = '1';
+      el.style.pointerEvents = 'auto'; 
+      
+      const qulf = el.querySelector('.qulf-belgisi');
+      if (qulf) qulf.remove();
+    }
+  });
+}
