@@ -596,8 +596,34 @@ function render(){
 function navHtml(){const i=flat.findIndex(f=>f[0]==cur.c&&f[1]==cur.t);return `<div class="nav"><button class="btn g" ${i<=0?"disabled":""} onclick="go(${i-1})">← Oldingi mavzu</button><button class="btn g" ${i<0||i>=flat.length-1?"disabled":""} onclick="go(${i+1})">Keyingi mavzu →</button></div>`}
 function go(i){pick(flat[i][0],flat[i][1])}
 function tg(k){if(open==k){open=-1}else{open=k;if(!CH[k].t.length){const fh=cur.c==null;cur={c:k,t:null};P=null;hist(fh)}}render()}
-function pick(c,t){if(!leaveOk())return;const fh=cur.c==null;cur={c,t};open=c;P=null;try{localStorage.setItem("gm_last",c+","+t)}catch(e){}render();hist(fh);navT(false);rtT(false);rkT(false);if(innerWidth<=860)document.getElementById("d").scrollIntoView()}
+function pick(c,t) {
+  // === TITAN QULF (Xavfsizlik) ===
+  const ustozMi = (typeof isStaff === 'function' && isStaff());
+  const isT = (typeof isTest === 'function' && isTest(CH[c].t[t]));
+  const qulfKodi = isT ? `bob_test_${c}` : `topic_${c}_${t}`;
+  
+  // Agar dars yopiq bo'lsa va bosgan odam ustoz bo'lmasa -> bloklaymiz!
+  if (!ustozMi && window.systemLocks && window.systemLocks[qulfKodi] !== true) {
+     if (typeof toastKorsat === 'function') toastKorsat("Bu mavzu yopiq! 🔒");
+     return; 
+  }
+  // ===============================
 
+  // O'zingizning eski kodingiz davomi:
+  if(!leaveOk()) return;
+  const fh = cur.c == null;
+  cur = {c, t};
+  open = c;
+  P = null;
+  try { localStorage.setItem("gm_last", c + "," + t); } catch(e) {}
+  
+  render();
+  hist(fh);
+  navT(false);
+  rtT(false);
+  rkT(false);
+  if(innerWidth <= 860) document.getElementById("d").scrollIntoView();
+}
 function startP(s){
   if (!loginKerak(() => startP(s))) return; // <-- Eng asosiy qorovul shu!
 
@@ -1165,19 +1191,30 @@ document.addEventListener('click', (e) => {
 }, true);
 
 // Sehrli tugma bosilganda to'lqin (ripple) effekti
-document.addEventListener('click', function (e) {
-  const btn = e.target.closest('#login-btn');
-  if (!btn) return;
-  const r = btn.getBoundingClientRect();
-  const size = Math.max(r.width, r.height);
-  const span = document.createElement('span');
-  span.className = 'ripple';
-  span.style.width = span.style.height = size + 'px';
-  span.style.left = (e.clientX - r.left - size / 2) + 'px';
-  span.style.top  = (e.clientY - r.top  - size / 2) + 'px';
-  btn.appendChild(span);
-  setTimeout(() => span.remove(), 650);
-});
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-item-id]');
+  if (!el) return;
+  
+  // Qulf belgisini ustoz yoqib-o'chirayotganda bu qorovul xalaqit bermasligi kerak
+  if (e.target.closest('.inline-qulf') || e.target.closest('.switch')) return;
+
+  const itemId = el.dataset.itemId;
+  const ustozMi = (typeof isStaff === 'function' && isStaff());
+  const ochiq = (window.systemLocks && window.systemLocks[itemId] === true);
+  
+  // Agar dars ochiq bo'lsa YOKI bosayotgan odam ustoz bo'lsa -> indama, kirsin!
+  if (ochiq || ustozMi) return;
+
+  // QOLGAN BARCHA HOLATDA: Tizimga kirmaganlarga ham, oddiy o'quvchilarga ham qat'iy TA'QIQ!
+  e.preventDefault();
+  e.stopPropagation();
+  
+  if (typeof toastKorsat === 'function') {
+    toastKorsat(itemId.startsWith('bob_test')
+      ? 'Bu bob testi qulflangan 🔒'
+      : 'Bu dars qulflangan 🔒');
+  }
+}, true); // <- true turishi juda muhim, u eng birinchi bo'lib tutib oladi
 // Supabase orqali tizimga kirish funksiyasi
 async function kirishniBajarish(btn) {
   const email = document.getElementById('log-email').value.trim();
