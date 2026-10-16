@@ -250,7 +250,15 @@ function canVary(st){if(st.gen)return true;if(st._cv===undefined)st._cv=st.prac.
 function swapSet(s){
  const t=CH[cur.c].t[cur.t],k=key(t,s),a=R[k];
  const hasRes=Array.isArray(a)&&a.some(v=>v),typing=!!(P&&P.s===s&&!P.sum&&vals.some(filled));
- if((hasRes||typing)&&!confirm("Savollar almashtirilsa, shu mashqdagi hozirgi natijangiz o‘chadi va yangi savollar hisobga olinadi. Davom etamizmi?"))return;
+ 
+ // O'ZGARISH: Ogohlantirish matni o'zgardi
+ if((hasRes||typing)&&!confirm("Yangi savollarga o'tilsinmi? Xavotir olmang, avvalgi eng yaxshi natijangiz reytingda saqlanib qoladi!"))return;
+ 
+ // O'ZGARISH: O'chirishdan oldin eng yaxshi natijani xotiraga yozamiz
+ if(!R._b) R._b={};
+ const curOk = Array.isArray(a) ? a.filter(v=>v==1).length : 0;
+ if(curOk > (R._b[k]||0)) R._b[k] = curOk;
+
  if(P&&P.s===s){P=null;vals=[];clearP()}
  let seed,g=0;do{seed=1+Math.floor(Math.random()*999999);g++}while(seed===varOf(t,s)&&g<10);
  if(!R._v||typeof R._v!=="object")R._v={};
@@ -263,7 +271,11 @@ function swapSet(s){
 const save=()=>{try{localStorage.setItem(RKEY,JSON.stringify(R))}catch(e){}};
 const ready=t=>!!(t.rules||t.sets);
 const cols=Q=>Q.length>8&&Math.max(...Q.map(q=>q.length))<=20?3:2;
-const cnt=(t,s)=>(R[key(t,s)]||[]).filter(v=>v==1).length;
+const cnt=(t,s)=>{
+  const k=key(t,s);
+  const curOk = (R[k]||[]).filter(v=>v==1).length;
+  return (R._b && R._b[k] > curOk) ? R._b[k] : curOk;
+};
 /* ---------- 90% PASS MANTIQI (Faqat Uyga Vazifa) ---------- */
 const HW_PASS = 90;
 const total = t => t.sets.reduce((a, st, s) => a + (st.isHw && PQ(t, s) ? PQ(t, s).length : 0), 0);
@@ -282,7 +294,23 @@ function useUserR(){
  try{if(localStorage.getItem(k)===null){const old=localStorage.getItem("gm_res");if(old){localStorage.setItem(k,old);localStorage.removeItem("gm_res")}}}catch(e){}
  RKEY=k;loadR();
 }
-function lessonStats(){let ok=0,wr=0,fin=0;CH.forEach(c=>c.t.forEach(t=>{if(!t.sets||isTest(t))return;t.sets.forEach((st,s)=>{const a=R[key(t,s)];if(!Array.isArray(a))return;a.forEach(v=>{if(v==1)ok++;else if(v==2)wr++});if(a.length&&a.every(v=>v))fin++})}));return{ok,wr,fin};}
+function lessonStats(){
+ let ok=0,wr=0,fin=0;
+ CH.forEach(c=>c.t.forEach(t=>{
+  if(!t.sets||isTest(t))return;
+  t.sets.forEach((st,s)=>{
+   const k=key(t,s), a=R[k];
+   let curOk=0, curWr=0;
+   if(Array.isArray(a)){
+    a.forEach(v=>{if(v==1)curOk++;else if(v==2)curWr++});
+    if(a.length&&a.every(v=>v))fin++;
+   }
+   if(R._b && R._b[k] > curOk) curOk = R._b[k]; // Eng yaxshi natijani ishlatish
+   ok += curOk; wr += curWr;
+  });
+ }));
+ return{ok,wr,fin};
+}
 function offlineUser(){try{for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(/^sb-.*-auth-token$/.test(k)){const v=JSON.parse(localStorage.getItem(k));const u=v&&(v.user||(v.currentSession&&v.currentSession.user));if(u&&u.id)return u}}}catch(e){}return null;}
 const qKey=()=>"gm_q_"+(currentUser?currentUser.id:"x");
 function qGet(){try{return JSON.parse(localStorage.getItem(qKey())||"[]")}catch(e){return[]}}
@@ -698,6 +726,12 @@ function finishP(){
  const left=Q.filter((q,i)=>!filled(vals[i])).length;
  if(left&&!confirm("Hali "+left+" ta misolga javob berilmagan. Baribir tugatib, natijani ko‘ramizmi?"))return;
  R[k]=Q.map((q,i)=>filled(vals[i])?(check(vals[i],q)?1:2):0);
+ 
+ // O'ZGARISH: Tugatganda ham eng yaxshi natijani saqlaymiz
+ if(!R._b) R._b = {};
+ const curOk = R[k].filter(v=>v==1).length;
+ if(curOk > (R._b[k]||0)) R._b[k] = curOk;
+
  save();
  syncPractice().then(reytingYukla);
  P.elapsed=Math.floor((Date.now()-P.startTime)/1000);
