@@ -1243,45 +1243,45 @@ document.addEventListener('click', (e) => {
 }, true); // <- true turishi juda muhim, u eng birinchi bo'lib tutib oladi
 // Supabase orqali tizimga kirish funksiyasi
 async function kirishniBajarish(btn) {
-  const email = document.getElementById('log-email').value.trim();
+  const rawLogin = document.getElementById('log-email').value.trim();
   const pass = document.getElementById('log-pass').value;
 
-  if (!email || !pass) {
+  if (!rawLogin || !pass) {
     toastKorsat("Iltimos, email va parolni to'liq kiriting");
     return;
   }
 
-  // Tugma holatini o'zgartirish (yuklanish jarayoni)
+  // O'ZGARISH: O'quvchi faqat 'talaba01' yozsa, orqasiga domen qo'shamiz
+  let finalEmail = rawLogin;
+  if (!finalEmail.includes('@')) {
+    finalEmail = finalEmail.toLowerCase() + '@users.matematiklar.uz';
+  }
+
   const oldText = btn.innerHTML;
   btn.innerHTML = "Kirilmoqda...";
   btn.style.opacity = "0.7";
   btn.style.pointerEvents = "none";
 
-  // Supabase dan tekshirish
   const { data, error } = await db.auth.signInWithPassword({
-    email: email,
+    email: finalEmail,
     password: pass
   });
 
   if (error) {
-    toastKorsat("Xatolik: Email yoki parol noto'g'ri");
+    toastKorsat("Xatolik: Login yoki parol noto'g'ri");
     btn.innerHTML = oldText;
     btn.style.opacity = "1";
     btn.style.pointerEvents = "auto";
   } else {
-    // Muvaffaqiyatli kirilsa
     toastKorsat("Tizimga muvaffaqiyatli kirdingiz!");
     document.getElementById('log-email').value = '';
     document.getElementById('log-pass').value = '';
     
-    // Tugmani asl holiga qaytarib oynani yopamiz va ma'lumotlarni yangilaymiz
     btn.innerHTML = oldText;
     btn.style.opacity = "1";
     btn.style.pointerEvents = "auto";
     
     hideLoginOverlay();
-    
-    // Mehmon rejimini o'chirib, o'quvchi (profil) rejimini yuklash
     await holatniTekshirish();
   }
 }
