@@ -25,7 +25,7 @@
 
     <!-- EMAIL VA PAROL QUTILARI -->
     <div style="margin-bottom: 24px; text-align: left;">
-      <input type="email" id="log-email" placeholder="Email manzil" style="width: 100%; padding: 14px 16px; margin-bottom: 12px; border: 1px solid #cbd5e1; border-radius: 12px; font-size: 15px; outline: none; box-sizing: border-box; transition: border 0.3s; background: #f8fafc;" onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#cbd5e1'">
+      <input type="text" id="log-email" placeholder="Login (masalan: talaba01)" style="width: 100%; padding: 14px 16px; margin-bottom: 12px; border: 1px solid #cbd5e1; border-radius: 12px; font-size: 15px; outline: none; box-sizing: border-box; transition: border 0.3s; background: #f8fafc;" onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#cbd5e1'">
       
       <input type="password" id="log-pass" placeholder="Parol" style="width: 100%; padding: 14px 16px; border: 1px solid #cbd5e1; border-radius: 12px; font-size: 15px; outline: none; box-sizing: border-box; transition: border 0.3s; background: #f8fafc;" onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#cbd5e1'">
     </div>
@@ -71,6 +71,8 @@
       <button data-t="res" onclick="tpTab('res')">Natijalar</button>
       <button data-t="hw" onclick="tpTab('hw')">Uyga vazifalar</button>
       <button data-t="hard" onclick="tpTab('hard')">Qiyin misollar</button>
+      <button onclick="aiPedagogikTahlil()">✨ AI Tahlil</button>
+  
       <!-- YANGI QO'SHILGAN TUGMA -->
       <button data-t="locks" onclick="tpTab('locks')">Qulflar (Pult)</button>
       <button class="tp-rf" onclick="tpRefresh()" title="Yangilash" aria-label="Yangilash">↻</button>

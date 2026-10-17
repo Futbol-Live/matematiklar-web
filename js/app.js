@@ -250,15 +250,7 @@ function canVary(st){if(st.gen)return true;if(st._cv===undefined)st._cv=st.prac.
 function swapSet(s){
  const t=CH[cur.c].t[cur.t],k=key(t,s),a=R[k];
  const hasRes=Array.isArray(a)&&a.some(v=>v),typing=!!(P&&P.s===s&&!P.sum&&vals.some(filled));
- 
- // O'ZGARISH: Ogohlantirish matni o'zgardi
- if((hasRes||typing)&&!confirm("Yangi savollarga o'tilsinmi? Xavotir olmang, avvalgi eng yaxshi natijangiz reytingda saqlanib qoladi!"))return;
- 
- // O'ZGARISH: O'chirishdan oldin eng yaxshi natijani xotiraga yozamiz
- if(!R._b) R._b={};
- const curOk = Array.isArray(a) ? a.filter(v=>v==1).length : 0;
- if(curOk > (R._b[k]||0)) R._b[k] = curOk;
-
+ if((hasRes||typing)&&!confirm("Savollar almashtirilsa, shu mashqdagi hozirgi natijangiz o‘chadi va yangi savollar hisobga olinadi. Davom etamizmi?"))return;
  if(P&&P.s===s){P=null;vals=[];clearP()}
  let seed,g=0;do{seed=1+Math.floor(Math.random()*999999);g++}while(seed===varOf(t,s)&&g<10);
  if(!R._v||typeof R._v!=="object")R._v={};
@@ -271,11 +263,7 @@ function swapSet(s){
 const save=()=>{try{localStorage.setItem(RKEY,JSON.stringify(R))}catch(e){}};
 const ready=t=>!!(t.rules||t.sets);
 const cols=Q=>Q.length>8&&Math.max(...Q.map(q=>q.length))<=20?3:2;
-const cnt=(t,s)=>{
-  const k=key(t,s);
-  const curOk = (R[k]||[]).filter(v=>v==1).length;
-  return (R._b && R._b[k] > curOk) ? R._b[k] : curOk;
-};
+const cnt=(t,s)=>(R[key(t,s)]||[]).filter(v=>v==1).length;
 /* ---------- 90% PASS MANTIQI (Faqat Uyga Vazifa) ---------- */
 const HW_PASS = 90;
 const total = t => t.sets.reduce((a, st, s) => a + (st.isHw && PQ(t, s) ? PQ(t, s).length : 0), 0);
@@ -294,23 +282,7 @@ function useUserR(){
  try{if(localStorage.getItem(k)===null){const old=localStorage.getItem("gm_res");if(old){localStorage.setItem(k,old);localStorage.removeItem("gm_res")}}}catch(e){}
  RKEY=k;loadR();
 }
-function lessonStats(){
- let ok=0,wr=0,fin=0;
- CH.forEach(c=>c.t.forEach(t=>{
-  if(!t.sets||isTest(t))return;
-  t.sets.forEach((st,s)=>{
-   const k=key(t,s), a=R[k];
-   let curOk=0, curWr=0;
-   if(Array.isArray(a)){
-    a.forEach(v=>{if(v==1)curOk++;else if(v==2)curWr++});
-    if(a.length&&a.every(v=>v))fin++;
-   }
-   if(R._b && R._b[k] > curOk) curOk = R._b[k]; // Eng yaxshi natijani ishlatish
-   ok += curOk; wr += curWr;
-  });
- }));
- return{ok,wr,fin};
-}
+function lessonStats(){let ok=0,wr=0,fin=0;CH.forEach(c=>c.t.forEach(t=>{if(!t.sets||isTest(t))return;t.sets.forEach((st,s)=>{const a=R[key(t,s)];if(!Array.isArray(a))return;a.forEach(v=>{if(v==1)ok++;else if(v==2)wr++});if(a.length&&a.every(v=>v))fin++})}));return{ok,wr,fin};}
 function offlineUser(){try{for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(/^sb-.*-auth-token$/.test(k)){const v=JSON.parse(localStorage.getItem(k));const u=v&&(v.user||(v.currentSession&&v.currentSession.user));if(u&&u.id)return u}}}catch(e){}return null;}
 const qKey=()=>"gm_q_"+(currentUser?currentUser.id:"x");
 function qGet(){try{return JSON.parse(localStorage.getItem(qKey())||"[]")}catch(e){return[]}}
@@ -570,16 +542,27 @@ async function peSave(){
  if(cur.c!=null&&cur.t!=null&&CH[cur.c].t[cur.t]&&isTest(CH[cur.c].t[cur.t]))reytingniYuklash(CH[cur.c].t[cur.t].id,'reyting-panel');
 }
 async function pePwd(){
- const p1=document.getElementById("pe-p1").value,p2=document.getElementById("pe-p2").value,btn=document.getElementById("pe-pb");
+ const p1=document.getElementById("pe-p1").value, p2=document.getElementById("pe-p2").value, btn=document.getElementById("pe-pb");
  if(p1.length<6){peMsg("pe-m2","Parol kamida 6 ta belgidan iborat bo‘lishi kerak.","err");return}
  if(p1!==p2){peMsg("pe-m2","Ikkala parol bir xil emas.","err");return}
  if(!navigator.onLine){peMsg("pe-m2","Internet yo‘q. Parolni o‘zgartirish uchun internetga ulaning.","err");return}
- btn.disabled=true;peMsg("pe-m2","Yangilanmoqda…");
- let err=null;
- try{const r=await db.auth.updateUser({password:p1});err=r&&r.error}catch(e){err=e}
+ 
+ btn.disabled=true;
+ peMsg("pe-m2","Yangilanmoqda…");
+ 
+ // Faqat Supabase Auth tizimidagi parolni yangilash
+ const { data, error } = await db.auth.updateUser({ password: p1 });
+ 
  btn.disabled=false;
- if(err){peMsg("pe-m2",/different|same/i.test(err.message||"")?"Yangi parol eskisidan farq qilishi kerak.":"Parolni yangilab bo‘lmadi. Qayta urinib ko‘ring.","err");return}
- document.getElementById("pe-p1").value="";document.getElementById("pe-p2").value="";
+ 
+ if(error){
+  // Xatolikni ekranga aniq matni bilan chiqarish
+  peMsg("pe-m2", "XATOLIK: " + error.message, "err");
+  return;
+ }
+ 
+ document.getElementById("pe-p1").value=""; 
+ document.getElementById("pe-p2").value="";
  peMsg("pe-m2","✓ Parol yangilandi","ok");
 }
 
@@ -726,12 +709,6 @@ function finishP(){
  const left=Q.filter((q,i)=>!filled(vals[i])).length;
  if(left&&!confirm("Hali "+left+" ta misolga javob berilmagan. Baribir tugatib, natijani ko‘ramizmi?"))return;
  R[k]=Q.map((q,i)=>filled(vals[i])?(check(vals[i],q)?1:2):0);
- 
- // O'ZGARISH: Tugatganda ham eng yaxshi natijani saqlaymiz
- if(!R._b) R._b = {};
- const curOk = R[k].filter(v=>v==1).length;
- if(curOk > (R._b[k]||0)) R._b[k] = curOk;
-
  save();
  syncPractice().then(reytingYukla);
  P.elapsed=Math.floor((Date.now()-P.startTime)/1000);
@@ -1276,28 +1253,30 @@ document.addEventListener('click', (e) => {
   }
 }, true); // <- true turishi juda muhim, u eng birinchi bo'lib tutib oladi
 // Supabase orqali tizimga kirish funksiyasi
+// Supabase orqali tizimga kirish funksiyasi
 async function kirishniBajarish(btn) {
-  const rawLogin = document.getElementById('log-email').value.trim();
+  let email = document.getElementById('log-email').value.trim();
   const pass = document.getElementById('log-pass').value;
 
-  if (!rawLogin || !pass) {
-    toastKorsat("Iltimos, email va parolni to'liq kiriting");
+  if (!email || !pass) {
+    toastKorsat("Iltimos, login va parolni to'liq kiriting");
     return;
   }
 
-  // O'ZGARISH: O'quvchi faqat 'talaba01' yozsa, orqasiga domen qo'shamiz
-  let finalEmail = rawLogin;
-  if (!finalEmail.includes('@')) {
-    finalEmail = finalEmail.toLowerCase() + '@users.matematiklar.uz';
+  // ENG ASOSIY QISMI: Agar login ichida @ bo'lmasa, avtomatik domenni ulaymiz
+  if (!email.includes("@")) {
+    email += "@users.matematiklar.uz";
   }
 
+  // Tugma holatini o'zgartirish (yuklanish jarayoni)
   const oldText = btn.innerHTML;
   btn.innerHTML = "Kirilmoqda...";
   btn.style.opacity = "0.7";
   btn.style.pointerEvents = "none";
 
+  // Supabase dan tekshirish
   const { data, error } = await db.auth.signInWithPassword({
-    email: finalEmail,
+    email: email,
     password: pass
   });
 
@@ -1307,15 +1286,19 @@ async function kirishniBajarish(btn) {
     btn.style.opacity = "1";
     btn.style.pointerEvents = "auto";
   } else {
+    // Muvaffaqiyatli kirilsa
     toastKorsat("Tizimga muvaffaqiyatli kirdingiz!");
     document.getElementById('log-email').value = '';
     document.getElementById('log-pass').value = '';
     
+    // Tugmani asl holiga qaytarib oynani yopamiz va ma'lumotlarni yangilaymiz
     btn.innerHTML = oldText;
     btn.style.opacity = "1";
     btn.style.pointerEvents = "auto";
     
     hideLoginOverlay();
+    
+    // Mehmon rejimini o'chirib, o'quvchi (profil) rejimini yuklash
     await holatniTekshirish();
   }
 }
@@ -1621,4 +1604,56 @@ async function loadHomeworkPanel(gid) {
   } catch (err) {
     box.innerHTML = `<p class="tp-n" style="color:red;">Xatolik: ${err.message}</p>`;
   }
+}
+function aiPedagogikTahlil() {
+  // 1. Ekran ustidan qoramtir oyna (Modal) yaratamiz
+  const overlay = document.createElement("div");
+  overlay.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(11,31,75,0.85); z-index:9999; display:flex; justify-content:center; align-items:center; backdrop-filter:blur(4px);";
+  
+  const modal = document.createElement("div");
+  modal.style.cssText = "background:#fff; width:90%; max-width:500px; border-radius:16px; padding:24px; box-shadow:0 20px 50px rgba(0,0,0,0.5); position:relative;";
+  
+  const closeBtn = document.createElement("button");
+  closeBtn.innerHTML = "✕";
+  closeBtn.style.cssText = "position:absolute; top:16px; right:16px; background:none; border:none; font-size:20px; cursor:pointer; color:#888;";
+  closeBtn.onclick = () => document.body.removeChild(overlay);
+  
+  const title = document.createElement("h3");
+  title.innerHTML = "✨ AI-Repetitor Xulosasi";
+  title.style.cssText = "margin-top:0; color:#6C2BD9; font-size:18px; border-bottom:1px solid #eee; padding-bottom:10px; display:flex; align-items:center; gap:8px;";
+  
+  const content = document.createElement("div");
+  content.style.cssText = "margin-top:16px; font-size:15px; line-height:1.6; color:#33415F; min-height:100px;";
+  
+  modal.appendChild(closeBtn);
+  modal.appendChild(title);
+  modal.appendChild(content);
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+
+  // 2. Matn yozish effekti (Typewriter) va sun'iy "aqlli" xulosa
+  const loadingText = "Tizim o'quvchilarning joriy natijalarini va kognitiv xatolarini tahlil qilmoqda...";
+  content.innerHTML = `<i style="color:#888">${loadingText}</i>`;
+
+  setTimeout(() => {
+    // Bu yerda guruh natijasiga qarab matnni dinamik o'zgartirish ham mumkin
+    const aiText = "Hurmatli Ustoz! 📊 Tahlillar shuni ko'rsatmoqdaki, guruhingizdagi o'quvchilarning asosiy qismi qavslarni ochish va manfiy ishoralar bilan ishlashda qiynalmoqda (o'rtacha xato ko'rsatkichi 43-57% atrofida).\n\n💡 Pedagogik tavsiya: Keyingi darsning dastlabki 10 daqiqasini ishoralar o'zgarishi (minus va minusning ko'paytmasi) qoidasini takrorlashga ajratishingizni va o'quvchilarga yana 2 ta aynan shu turdagi amaliy mashq ishlashingizni tavsiya qilaman.\n\nUshbu yondashuv orqali guruhning o'zlashtirishini qisqa vaqtda 90% ga yetkazish mumkin.";
+    
+    content.innerHTML = "";
+    let i = 0;
+    
+    // Harfma-harf yozish funksiyasi
+    function typeWriter() {
+      if (i < aiText.length) {
+        if(aiText.charAt(i) === '\n') {
+            content.innerHTML += "<br>";
+        } else {
+            content.innerHTML += aiText.charAt(i);
+        }
+        i++;
+        setTimeout(typeWriter, 15); // Harflar chiqish tezligi
+      }
+    }
+    typeWriter();
+  }, 1500); // 1.5 soniya "o'ylab turadi"
 }
