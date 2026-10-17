@@ -5,7 +5,13 @@ let toastTimer;
 // Supabase integratsiyasi
 const SUPABASE_URL = 'https://pvtzqqhnrbfqirplblgc.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_KRghPA6HgJ0grW5NW7lj5w_Jvf-ksoX';
-const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: false
+  }
+});
 let currentUser = null;
 let isEditingName = false;
 let isEditingPassword = false;
@@ -156,7 +162,7 @@ async function reytingniYuklash(chapterId, containerId) {
 }
 
 const NAMES="Musbat va manfiy sonlar|Kasrlar|O‘nli kasrlar|Sonning darajasi|Harfli ifodalar|Birhadlar va ko‘phadlar|Ko‘paytuvchilarga ajratish|Qisqa ko‘paytirish formulalari|Algebraik kasrlar|Chiziqli tenglamalar|Chiziqli funksiyalar|Chiziqli tengsizliklar|Proporsiya|Foizlar|Modullar|Ildizlar|Sistemalar|Kvadrat tenglamalar|Kvadrat tengsizliklar|Progressiyalar|Ko‘rsatkichlar|Logarifm|Trigonometriya|Hosila|Integral".split("|");
-const TOTAL=80; 
+let TOTAL=0; 
 const CH=NAMES.map(n=>({n,t:[]}));
 const CONTENT=[[0,"data/general-math/ch01.js"]];
 const flat=[];
@@ -173,6 +179,8 @@ function buildIndex() {
   }));
   flat.length = 0;
   CH.forEach((c, ci) => c.t.forEach((t, ti) => flat.push([ci, ti])));
+
+  TOTAL = flat.length;
 }
 function loadScript(u){return new Promise((ok,no)=>{const s=document.createElement("script");s.src=u;s.onload=ok;s.onerror=()=>no(new Error("Yuklanmadi: "+u));document.head.appendChild(s)})}
 async function loadContent(){
@@ -205,7 +213,17 @@ function evalMath(src){
 const ans=q=>{try{return evalMath(q)}catch(e){return NaN}};
 function ratOf(x){if(!isFinite(x))return null;if(Math.abs(x-Math.round(x))<1e-9)return[Math.round(x),1];for(let q=2;q<=1000;q++){const p=Math.round(x*q);if(Math.abs(x-p/q)<1e-9)return[p,q]}return null}
 function fmtNum(x){if(!isFinite(x))return "—";const r=ratOf(x);if(!r)return "≈ "+x.toFixed(4).replace(".",",");if(r[1]==1)return String(r[0]===0?0:r[0]);const d=+x.toFixed(4);return r[0]+"/"+r[1]+(Math.abs(d-x)<1e-9?" = "+String(d).replace(".",","):"")}
-function check(v,q){try{const a=evalMath(v),b=ans(q);if(!isFinite(a)||!isFinite(b))return false;return Math.abs(a-b)<=(ratOf(b)?1e-9:1e-3)*Math.max(1,Math.abs(b))}catch(e){return false}}
+function evalAns(src){
+ if(/\d\s+\d/.test(src))bad("aralash");
+ const s=String(src||"").trim().replace(/[−–—]/g,"-").replace(/(\d),(\d)/g,"$1.$2").replace(/\s+/g,"");
+ if(!s)bad();
+ // Qo'shish, o'rtadagi ayirish, ko'paytirish, bo'lish va qavslar qat'iy rad etiladi
+ if(!/^[+-]?(?:\d+(?:\.\d+)?(?:\/\d+|\^[+-]?\d+|[⁰¹²³⁴⁵⁶⁷⁸⁹]+)?|(?:sqrt|cbrt|√|∛)\(\d+(?:\.\d+)?\)|(?:√|∛)\d+(?:\.\d+)?|pi|π)$/i.test(s))bad("amal");
+ const m=s.match(/^[+-]?(\d+)\/(\d+)$/);
+ if(m){const p=+m[1],q=+m[2];if(q===0)bad("0");if(p%q===0)bad("butun")}
+ return evalMath(s);
+}
+function check(v,q){try{const a=evalAns(v),b=ans(q);if(!isFinite(a)||!isFinite(b))return false;return Math.abs(a-b)<=(ratOf(b)?1e-9:1e-3)*Math.max(1,Math.abs(b))}catch(e){return false}}
 const QF=s=>M(s).replace(/(\d+)\s*\/\s*(\d+)/g,'<span class="fr"><span>$1</span><span>$2</span></span>').replace(/\^([-−]?\w+)/g,"<sup>$1</sup>");
 
 const key=(t,s)=>s?t.id+"#"+s:t.id;
@@ -265,15 +283,25 @@ const ready=t=>!!(t.rules||t.sets);
 const cols=Q=>Q.length>8&&Math.max(...Q.map(q=>q.length))<=20?3:2;
 const cnt=(t,s)=>(R[key(t,s)]||[]).filter(v=>v==1).length;
 /* ---------- 90% PASS MANTIQI (Faqat Uyga Vazifa) ---------- */
-const HW_PASS = 90;
-const total = t => t.sets.reduce((a, st, s) => a + (st.isHw && PQ(t, s) ? PQ(t, s).length : 0), 0);
-const correct = t => t.sets.reduce((a, st, s) => a + (st.isHw ? (cnt(t, s) || 0) : 0), 0);
+/* ---------- 86% PASS MANTIQI (Uyga Vazifa va Testlar) ---------- */
+const HW_PASS = 86;
+const hasHw = t => !!(t.sets && t.sets.some(st => st.isHw));
+const total = t => {
+  if (!t.sets) return 0;
+  const hw = hasHw(t);
+  return t.sets.reduce((a, st, s) => a + ((hw ? st.isHw : true) && PQ(t, s) ? PQ(t, s).length : 0), 0);
+};
+const correct = t => {
+  if (!t.sets) return 0;
+  const hw = hasHw(t);
+  return t.sets.reduce((a, st, s) => a + ((hw ? st.isHw : true) ? (cnt(t, s) || 0) : 0), 0);
+};
 const hwPct = t => {
   const n = total(t);
-  if (n === 0) return 100; // Agar hw qo'shilmagan dars bo'lsa, qulflanmaydi
+  if (n === 0) return 0; // Savol ishlanmaguncha 0% bo'lib turadi (avtomatik ✓ yonmaydi)
   return Math.round((correct(t) / n) * 1000) / 10;
 };
-const done = t => ready(t) && hwPct(t) >= HW_PASS;
+const done = t => ready(t) && total(t) > 0 && hwPct(t) >= HW_PASS;
 
 const isTest=t=>t.type==='test'||t.t.includes('O‘zlashtirish mashqi');
 let RK={rows:[],me:null,loaded:false,noPractice:false,sort:"test"};
@@ -371,77 +399,6 @@ function rkT(on){
 }
 let cur={c:null,t:null},open=0,first=true,P=null,vals=[];
 const clearP=()=>document.querySelectorAll('[id^="pr"]').forEach(e=>e.innerHTML="");
-
-function renderSide(){
-  const rd=flat.map(([c,t])=>CH[c].t[t]).filter(ready),pct=Math.min(100,Math.round(rd.length/TOTAL*100));
-  document.getElementById("ovt").textContent=`Kurs tayyorligi ${pct}% · ${rd.length} / ${TOTAL} mavzu`;
-  document.getElementById("ovb").style.width=pct+"%";
-  let h=`<div class="dh"><b>Mundarija</b><button onclick="navT(false)" aria-label="Yopish">✕</button></div>`;
-
-  const ustozMi = (typeof isStaff === 'function' && isStaff());
-  window.systemLocks = window.systemLocks || {};
-
-  CH.forEach((c,k)=>{
-    const bobId = `chapter_${k}`;
-    const bobOchiq = systemLocks[bobId] === true;
-
-    // --- Bob qulfi (Claude'ning katta switch'i) ---
-    let bobQulf = '';
-    if (ustozMi) {
-      bobQulf = `
-        <label class="switch" onclick="inlineQulfniBos(event, '${bobId}')" title="Bobni ochish/yopish" style="margin-left:auto; transform: scale(0.85); transform-origin: right center; z-index: 10;">
-          <input class="switch__input" type="checkbox" ${bobOchiq ? 'checked' : ''} style="pointer-events: none;">
-          <span class="switch__track"><span class="switch__knob"><span class="lock"><i class="lock__shackle"></i><i class="lock__body"></i></span></span></span>
-        </label>
-      `;
-    } else if (!bobOchiq) {
-      bobQulf = `<span style="margin-left:auto; opacity:0.5; font-size:13px;">🔒 Yopiq</span>`;
-    }
-
-    const bobMuzlatish = (!ustozMi && !bobOchiq) ? 'opacity:0.5; pointer-events:none;' : '';
-
-    h+=`<div class="sec ${k==open?"open":""}" style="animation-delay:${first?k*.025:0}s">
-          <button class="sh" data-item-id="${bobId}" onclick="tg(${k})" style="${bobMuzlatish}; position:relative;">
-            <span class="k">${k+1}</span>
-            <span style="flex:1"><b>${c.n}</b><small>${c.t.length?c.t.length+" ta mavzu":"to‘ldirilmoqda"}</small></span>
-            ${bobQulf}
-            <span class="cv" style="${ustozMi ? 'margin-left: 10px;' : ''}">▶</span>
-          </button>
-          <div class="tw"><div class="tl">`;
-
-    if(!c.t.length) h+=`<div class="soon">Mavzular to‘ldirilmoqda…</div>`;
-
-    c.t.forEach((t,i)=>{
-      const isT = (typeof isTest === 'function' && isTest(t));
-      const mavzuId = isT ? `bob_test_${k}` : `topic_${k}_${i}`;
-      const mavzuOchiq = systemLocks[mavzuId] === true;
-
-      // --- Mavzu qulfi (Claude'ning kichik switch--sm'i) ---
-      let mavzuQulf = '';
-      if (ustozMi) {
-        mavzuQulf = `
-          <label class="switch switch--sm" onclick="inlineQulfniBos(event, '${mavzuId}')" title="Mavzuni ochish/yopish" style="margin-left:auto; z-index: 10;">
-            <input class="switch__input" type="checkbox" ${mavzuOchiq ? 'checked' : ''} style="pointer-events: none;">
-            <span class="switch__track"><span class="switch__knob"><span class="lock"><i class="lock__shackle"></i><i class="lock__body"></i></span></span></span>
-          </label>
-        `;
-      } else if (!mavzuOchiq) {
-        mavzuQulf = `<span style="margin-left:auto; opacity:0.5; font-size:12px;">🔒</span>`;
-      }
-
-      const mavzuMuzlatish = (!ustozMi && !mavzuOchiq) ? 'opacity:0.5; pointer-events:none;' : '';
-
-      h+=`<button class="tp ${done(t)?"done":""} ${cur.c==k&&cur.t==i?"sel":""}" data-item-id="${mavzuId}" onclick="pick(${k},${i})" style="display:flex; align-items:center; position:relative; ${mavzuMuzlatish}">
-            <span class="dot">${done(t)?"✓":t.id}</span>
-            <span>${t.t}</span>
-            ${mavzuQulf}
-          </button>`;
-    });
-    h+="</div></div></div>"
-  });
-
-  const tc=document.getElementById("toc"),y=tc.scrollTop; tc.innerHTML=h; tc.scrollTop=y; first=false;
-}
 
 // Ustoz qulf belgisini bosganda ishlaydigan mustaqil funksiya
 
@@ -633,26 +590,53 @@ function navHtml() {
 function go(i){pick(flat[i][0],flat[i][1])}
 function tg(k){if(open==k){open=-1}else{open=k;if(!CH[k].t.length){const fh=cur.c==null;cur={c:k,t:null};P=null;hist(fh)}}render()}
 function pick(c,t) {
-  // === TITAN QULF (Xavfsizlik) ===
+  // === TITAN QULF VA QAT'IY KETMA-KETLIK ===
   const ustozMi = (typeof isStaff === 'function' && isStaff());
   const isT = (typeof isTest === 'function' && isTest(CH[c].t[t]));
   const qulfKodi = isT ? `bob_test_${c}` : `topic_${c}_${t}`;
-  
-  // Agar dars yopiq bo'lsa va bosgan odam ustoz bo'lmasa -> bloklaymiz!
+
+  // 1-qavat: Ustoz qulfini tekshirish (Mavzu o'zi ochiqmi?)
   if (!ustozMi && window.systemLocks && window.systemLocks[qulfKodi] !== true) {
      if (typeof toastKorsat === 'function') toastKorsat("Bu mavzu yopiq! 🔒");
-     return; 
+     return;
+  }
+
+  // 2-qavat: Qat'iy ketma-ketlik va Bypass (Aylanib o'tish)
+  if (!ustozMi) {
+    const targetIdx = flat.findIndex(f => f[0] === c && f[1] === t);
+    
+    // Oldingi barcha mavzularni aylanib chiqamiz
+    for (let i = 0; i < targetIdx; i++) {
+      const [pc, pt] = flat[i];
+      const prevMavzu = CH[pc].t[pt];
+
+      // Bu oldingi mavzuga aloqador qulf kodini topamiz
+      const isPrevTest = (typeof isTest === 'function' && isTest(prevMavzu));
+      const prevQulfKodi = isPrevTest ? `bob_test_${pc}` : `topic_${pc}_${pt}`;
+
+      // BYPASS: Agar ustoz bu mavzuni qulflab qo'ygan bo'lsa, uni tekshirmaymiz!
+      if (window.systemLocks && window.systemLocks[prevQulfKodi] !== true) {
+        continue;
+      }
+
+      // Agar mavzu ochiq bo'lsa, u 86% ga bajarilgan bo'lishi shart!
+      if (!done(prevMavzu)) {
+        if (typeof toastKorsat === 'function') {
+          toastKorsat(`Oldin "${prevMavzu.t}" mavzusini kamida 86% ga yakunlang!`);
+        }
+        return; // Dasturni to'xtatamiz, keyingi mavzuga kiritilmaydi!
+      }
+    }
   }
   // ===============================
 
-  // O'zingizning eski kodingiz davomi:
   if(!leaveOk()) return;
   const fh = cur.c == null;
   cur = {c, t};
   open = c;
   P = null;
   try { localStorage.setItem("gm_last", c + "," + t); } catch(e) {}
-  
+
   render();
   hist(fh);
   navT(false);
@@ -675,7 +659,7 @@ function startP(s){
 
 const qfs=l=>{const m=innerWidth<520;return l>24?(m?18:24):l>16?(m?22:30):(m?28:34)};
 const filled=v=>!!(v&&String(v).trim());
-const CHIPS=[["−","−",0],["·","·",0],["÷","÷",0],["a/b","/",0],["x²","²",0],["x³","³",0],["xⁿ","^",0],["√","√()",1],["∛","∛()",1],["( )","()",1],["π","π",0]];
+const CHIPS=[["−","−",0],["a/b","/",0],["x²","²",0],["x³","³",0],["xⁿ","^",0],["√","√()",1],["∛","∛()",1],["π","π",0]];
 function drawP(){
  if(P.sum)return drawSum();
  const t=CH[cur.c].t[cur.t],st=t.sets[P.s],Q=PQ(t,P.s),n=Q.length,i=P.i,pr=document.getElementById("pr"+P.s),qt=M(Q[i])+" = ?";
@@ -695,8 +679,13 @@ function drawP(){
 function pvw(){
  const inp=document.getElementById("in"),pv=document.getElementById("pv");if(!inp||!pv)return;
  const s=inp.value.trim();if(!s){pv.className="pv";pv.textContent="";return}
- try{const v=evalMath(s),plain=/^[+\-−–—]?\d+(?:[.,]\d+)?$/.test(s);pv.className="pv";pv.textContent=plain?"":"Qiymati: "+M(fmtNum(v))}
- catch(e){pv.className="pv w";pv.textContent=e.message=="aralash"?"Aralash sonni 3/2 yoki 1,5 ko‘rinishida yozing":e.message=="0"?"Nolga bo‘lib bo‘lmaydi":"Yozuv tugallanmagan yoki tushunarsiz"}
+ try{
+  const v=evalAns(s),plain=/^[+\-−–—]?\d+(?:[.,]\d+)?$/.test(s);
+  pv.className="pv";pv.textContent=plain?"":"Qiymati: "+M(fmtNum(v));
+ }catch(e){
+  pv.className="pv w";
+  pv.textContent=e.message=="amal"?"Ifodani emas, hisoblangan yakuniy javobni yozing":e.message=="butun"?"Bo‘linmani hisoblab, butun son ko‘rinishida yozing":e.message=="aralash"?"Aralash sonni 3/2 yoki 1,5 ko‘rinishida yozing":e.message=="0"?"Nolga bo‘lib bo‘lmaydi":"Yozuv tugallanmagan yoki tushunarsiz";
+ }
 }
 function toolsT(){P.tools=!P.tools;const t=document.getElementById("tools");if(t)t.hidden=!P.tools;const el=document.getElementById("in");if(el)el.focus()}
 function ins(s,b){const el=document.getElementById("in");if(!el)return;const a=el.selectionStart==null?el.value.length:el.selectionStart,e=el.selectionEnd==null?a:el.selectionEnd;el.value=el.value.slice(0,a)+s+el.value.slice(e);const pos=a+s.length-(b||0);el.focus();el.setSelectionRange(pos,pos);vals[P.i]=el.value;pvw()}
@@ -733,6 +722,22 @@ function drawSum(){
        reytingYukla();
      });
  }
+ // === YANGI: UYGA VAZIFANI DARHOL SAQLASH ===
+ if (st.isHw && !P.submittedHw && currentUser) {
+   P.submittedHw = true;
+   const p = hwPct(t);
+   const payload = {
+     student_id: currentUser.id,
+     topic_id: t.id,
+     topic_title: t.t,
+     percent: p,
+     correct: correct(t),
+     total: total(t),
+     passed: p >= HW_PASS
+   };
+   db.from('homework_scores').upsert(payload, { onConflict: 'student_id, topic_id' }).then(()=>{});
+ }
+ // ==========================================
 
  const pct=Math.round(ok/n*100);
  const msg=pct==100?"Mukammal! Hammasi to‘g‘ri 🎉":pct>=80?"Ajoyib natija!":pct>=60?"Yaxshi, yana biroz mashq qiling":pct>=40?"Qoniqarli. Qoidalarni takrorlang":"Qoidalarni qayta ko‘rib chiqib, yana urinib ko‘ring";
@@ -767,7 +772,17 @@ function goTo(sel){const e=document.querySelector(sel);if(e)e.scrollIntoView({be
 document.addEventListener("focusin",e=>{if(e.target&&/^(INPUT|TEXTAREA)$/.test(e.target.tagName))document.body.classList.add("typing")});
 document.addEventListener("keydown",e=>{if(e.key==="Escape")closePE()});
 document.addEventListener("focusout",()=>document.body.classList.remove("typing"));
-["email-input","password-input"].forEach(id=>{const e=document.getElementById(id);if(e)e.addEventListener("keydown",ev=>{if(ev.key=="Enter")tizimgaKirish()})});
+["log-email","log-pass"].forEach(id=>{
+ const e=document.getElementById(id);
+ if(e)e.addEventListener("keydown",ev=>{
+  if(ev.key==="Enter"){
+   ev.preventDefault();
+   const p=document.getElementById("log-pass");
+   if(id==="log-email"&&p&&!p.value){p.focus();return;}
+   kirishniBajarish(document.getElementById("login-btn"));
+  }
+ });
+});
 netUi();
 if("serviceWorker" in navigator&&/^https?:$/.test(location.protocol)){window.addEventListener("load",()=>{navigator.serviceWorker.register("sw.js").catch(()=>{})})}
 try{history.replaceState({c:null,t:null},"")}catch(e){}
@@ -1011,19 +1026,69 @@ function tpHardView(){
  <div class="stc2" style="margin-top:16px"><div class="rth" style="margin-top:0"><b>Eng qiyin misollar</b><small class="tp-n" style="margin-left:auto">1-urinish</small></div>${t2}</div>`;
 }
 
-/* ===== Tungi / Kunduzgi rejim ===== */
+/* ===== Tungi / Kunduzgi rejim (Doiraviy to'lqin animatsiyasi bilan) ===== */
 function syncThemeBtn() {
   const b = document.getElementById("thbtn");
   if (!b) return;
   const isDark = document.documentElement.getAttribute("data-theme") === "dark";
   b.textContent = isDark ? "☀️" : "🌙";
+  b.title = isDark ? "Kunduzgi rejim" : "Tungi rejim";
 }
-function toggleTheme() {
+
+function toggleTheme(ev) {
   const curTheme = document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
   const next = curTheme === "dark" ? "light" : "dark";
-  document.documentElement.setAttribute("data-theme", next);
-  try { localStorage.setItem("gm_theme", next); } catch (e) {}
-  syncThemeBtn();
+  const btn = document.getElementById("thbtn");
+
+  // Tugma markazining ekrandagi (X, Y) koordinatasini olamiz
+  let x = innerWidth - 40, y = 30;
+  if (ev && ev.clientX) {
+    x = ev.clientX; y = ev.clientY;
+  } else if (btn) {
+    const r = btn.getBoundingClientRect();
+    x = r.left + r.width / 2;
+    y = r.top + r.height / 2;
+  }
+
+  // Tugmadan ekranning eng uzoq burchagigacha (chap pastki burchak) bo'lgan masofa (radius)
+  const endRadius = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
+
+  const apply = () => {
+    document.documentElement.setAttribute("data-theme", next);
+    try { localStorage.setItem("gm_theme", next); } catch (e) {}
+    syncThemeBtn();
+  };
+
+  // Agar brauzer View Transitions API ni qo'llamasa, oddiy o'tkazish
+  if (!document.startViewTransition || matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    apply();
+    return;
+  }
+
+  const goingDark = next === "dark";
+  document.documentElement.classList.add(goingDark ? "vt-to-dark" : "vt-to-light");
+
+  const transition = document.startViewTransition(() => {
+    apply();
+  });
+
+  transition.ready.then(() => {
+    const clipStart = `circle(0px at ${x}px ${y}px)`;
+    const clipEnd = `circle(${endRadius}px at ${x}px ${y}px)`;
+
+    document.documentElement.animate(
+      { clipPath: goingDark ? [clipStart, clipEnd] : [clipEnd, clipStart] },
+      {
+        duration: 600,
+        easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+        pseudoElement: goingDark ? "::view-transition-new(root)" : "::view-transition-old(root)"
+      }
+    );
+  });
+
+  transition.finished.finally(() => {
+    document.documentElement.classList.remove("vt-to-dark", "vt-to-light");
+  });
 }
 syncThemeBtn();
 // Mehmon rejimi va Qulflar uchun yordamchi funksiyalar
@@ -1065,23 +1130,6 @@ db.auth.onAuthStateChange((event, session) => {
     }
   }
 });
-
-async function locksniYuklash() {
-  const { data, error } = await db.from('system_locks').select('item_id, is_open');
-  if (error) {
-    console.error('Qulflar o\'qilmadi:', error);
-    return;                        
-  }
-  systemLocks = {};
-  if (data) {
-    data.forEach(r => { systemLocks[r.item_id] = r.is_open; });
-  }
-  locksniQollash();
-}
-
-function ochiqmi(itemId) {
-  return systemLocks[itemId] !== false;
-}
 
 // Ustoz menyudan qulfni bosganda ishlaydigan mustaqil funksiya
 // =========================================================================
@@ -1211,21 +1259,6 @@ window.inlineQulfniBos = function(e, itemId) {
   db.from('system_locks').upsert(updates, { onConflict: 'item_id' })
     .then(({error}) => { if (error) console.error("Qulfni saqlashda xato", error); });
 };
-
-
-document.addEventListener('click', (e) => {
-  const el = e.target.closest('[data-item-id]');
-  
-  // QOIDA: Agar element yo'q bo'lsa Yoki dars OCHIQ bo'lsa Yoki bosayotgan odam USTOZ bo'lsa -> indama, o'tkazib yubor!
-  if (!el || ochiqmi(el.dataset.itemId) || (typeof isStaff === 'function' && isStaff())) return;
-  
-  e.preventDefault();
-  e.stopPropagation();
-  const id = el.dataset.itemId;
-  toastKorsat(id.startsWith('bob_test')
-    ? 'Bu bob testi ustoz tomonidan qulflangan'
-    : 'Bu bob ustoz tomonidan qulflangan');
-}, true);
 
 // Sehrli tugma bosilganda to'lqin (ripple) effekti
 document.addEventListener('click', (e) => {
@@ -1560,15 +1593,26 @@ window.checkAndGo = async function(btn, cIndex, tIndex, nextIndex) {
 /* ---------- UYGA VAZIFA JADVALI (Ustoz paneli uchun) ---------- */
 let hwTableInstance = null; // Jadval obyektini saqlaydi
 
-/* ---------- UYGA VAZIFA JADVALI ---------- */
+/* ---------- UYGA VAZIFA JADVALI (Guruhlar bo'yicha ajratilgan) ---------- */
 async function loadHomeworkPanel(gid) {
   const box = tpE("tp-pane-hw");
   if (!box) return;
   box.innerHTML = '<p class="tp-n">Yuklanmoqda…</p>';
   
   try {
+    // 1. Avval tanlangan guruhdagi o'quvchilarni topib olamiz
+    const mems = await tpRpc("teacher_group_members", { p_group: gid }) || [];
+    const memIds = mems.map(m => m.user_id);
+    
+    if (memIds.length === 0) {
+      box.innerHTML = '<p class="tp-n">Bu guruhda o\'quvchilar yo\'q.</p>';
+      return;
+    }
+
+    // 2. Faqat shu guruh o'quvchilarining baholarini tortamiz
     const { data, error } = await db.from('homework_scores')
       .select('percent, created_at, topic_title, profiles!inner(full_name)')
+      .in('student_id', memIds)
       .order('created_at', { ascending: false })
       .limit(50);
       
@@ -1581,7 +1625,7 @@ async function loadHomeworkPanel(gid) {
 
     const rows = data.map(r => {
       const pct = r.percent;
-      const cls = pct >= 90 ? 'g' : (pct >= 50 ? 'm' : 'b'); // yashil, sariq, qizil
+      const cls = pct >= 86 ? 'g' : (pct >= 50 ? 'm' : 'b'); // yashil, sariq, qizil
       const dt = new Date(r.created_at).toLocaleString('uz-UZ', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'});
       
       return `<tr>
@@ -1606,24 +1650,32 @@ async function loadHomeworkPanel(gid) {
   }
 }
 function aiPedagogikTahlil() {
+  if (!TP.sel) {
+    toastKorsat("Iltimos, avval chap tomondan guruhni tanlang!");
+    return;
+  }
+
   // 1. Ekran ustidan qoramtir oyna (Modal) yaratamiz
   const overlay = document.createElement("div");
-  overlay.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(11,31,75,0.85); z-index:9999; display:flex; justify-content:center; align-items:center; backdrop-filter:blur(4px);";
+  overlay.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(11,31,75,0.7); z-index:9999; display:flex; justify-content:center; align-items:center; backdrop-filter:blur(4px);";
   
   const modal = document.createElement("div");
-  modal.style.cssText = "background:#fff; width:90%; max-width:500px; border-radius:16px; padding:24px; box-shadow:0 20px 50px rgba(0,0,0,0.5); position:relative;";
+  // Dizayn tungi rejimga avtomatik moslashadi (var(--card) va var(--ink) orqali)
+  modal.style.cssText = "background:var(--card, #fff); width:90%; max-width:550px; border-radius:18px; padding:26px; box-shadow:0 20px 50px rgba(0,0,0,0.5); position:relative; color:var(--ink, #1b2340);";
   
   const closeBtn = document.createElement("button");
   closeBtn.innerHTML = "✕";
-  closeBtn.style.cssText = "position:absolute; top:16px; right:16px; background:none; border:none; font-size:20px; cursor:pointer; color:#888;";
+  closeBtn.style.cssText = "position:absolute; top:18px; right:18px; background:none; border:none; font-size:20px; cursor:pointer; color:var(--mut, #888); transition:0.2s;";
+  closeBtn.onmouseover = () => closeBtn.style.color = "var(--bad, #dc2626)";
+  closeBtn.onmouseout = () => closeBtn.style.color = "var(--mut, #888)";
   closeBtn.onclick = () => document.body.removeChild(overlay);
   
   const title = document.createElement("h3");
   title.innerHTML = "✨ AI-Repetitor Xulosasi";
-  title.style.cssText = "margin-top:0; color:#6C2BD9; font-size:18px; border-bottom:1px solid #eee; padding-bottom:10px; display:flex; align-items:center; gap:8px;";
+  title.style.cssText = "margin:0 0 16px 0; color:var(--ac, #6C2BD9); font-size:19px; border-bottom:1px solid var(--line, #eee); padding-bottom:12px; display:flex; align-items:center; gap:8px;";
   
   const content = document.createElement("div");
-  content.style.cssText = "margin-top:16px; font-size:15px; line-height:1.6; color:#33415F; min-height:100px;";
+  content.style.cssText = "font-size:15px; line-height:1.6; min-height:120px;";
   
   modal.appendChild(closeBtn);
   modal.appendChild(title);
@@ -1631,29 +1683,110 @@ function aiPedagogikTahlil() {
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
 
-  // 2. Matn yozish effekti (Typewriter) va sun'iy "aqlli" xulosa
-  const loadingText = "Tizim o'quvchilarning joriy natijalarini va kognitiv xatolarini tahlil qilmoqda...";
-  content.innerHTML = `<i style="color:#888">${loadingText}</i>`;
+  // 2. Tizim o'ylayotganini ko'rsatish
+  const loadingText = "Guruh ko'rsatkichlari, eng ko'p qilingan xatolar va kognitiv bo'shliqlar tahlil qilinmoqda...";
+  content.innerHTML = `<i style="color:var(--mut, #888)">${loadingText}</i>`;
+
+  // 3. Haqiqiy ma'lumotlarni keshdan olish
+  const hardQ = TP.cache["hard:" + TP.sel] || [];
+  const hardT = TP.cache["top:" + TP.sel] || [];
+  const guruhNomi = tpE("tp-gt") ? tpE("tp-gt").textContent : "Guruh";
 
   setTimeout(() => {
-    // Bu yerda guruh natijasiga qarab matnni dinamik o'zgartirish ham mumkin
-    const aiText = "Hurmatli Ustoz! 📊 Tahlillar shuni ko'rsatmoqdaki, guruhingizdagi o'quvchilarning asosiy qismi qavslarni ochish va manfiy ishoralar bilan ishlashda qiynalmoqda (o'rtacha xato ko'rsatkichi 43-57% atrofida).\n\n💡 Pedagogik tavsiya: Keyingi darsning dastlabki 10 daqiqasini ishoralar o'zgarishi (minus va minusning ko'paytmasi) qoidasini takrorlashga ajratishingizni va o'quvchilarga yana 2 ta aynan shu turdagi amaliy mashq ishlashingizni tavsiya qilaman.\n\nUshbu yondashuv orqali guruhning o'zlashtirishini qisqa vaqtda 90% ga yetkazish mumkin.";
+    let aiText = `Hurmatli Ustoz! 📊 <b>"${guruhNomi}"</b> guruhining joriy natijalari va statistikasi asosida quyidagi xulosalar shakllantirildi:\n\n`;
+    
+    // Agar qiyin mavzular yetarlicha bo'lsa
+    if (hardT.length > 0) {
+      const topIssue = hardT[0];
+      const topicName = thTopic(topIssue.chapter) ? thTopic(topIssue.chapter).t : "Ba'zi mavzular";
+      
+      aiText += `⚠️ <b>Eng og'riqli nuqta:</b> O'quvchilar asosan "${topicName}" mavzusida qiynalmoqda (Birinchi urinishdagi xato ko'rsatkichi: <b>${topIssue.wrong_pct}%</b>).\n\n`;
+      
+      if (hardQ.length > 0) {
+        aiText += `Bunga eng ko'p sabab bo'layotgan misol:\n<code>${hardQ[0].question} = ?</code> (${hardQ[0].students_wrong} ta o'quvchi xato qilgan).\n\n`;
+      }
+      
+      aiText += `💡 <b>Pedagogik tavsiya:</b> Keyingi darsning dastlabki 10 daqiqasini aynan shu qoidalarni takrorlashga ajratishingizni va o'xshash misollar ustida qo'shimcha ishlashingizni tavsiya qilaman.`;
+    } 
+    // Agar hamma zo'r o'zlashtirayotgan yoki xatolar yo'q bo'lsa
+    else {
+      aiText += `✅ Hozirgi vaqtda guruhda yaqqol oqsayotgan yoki qiyin o'zlashtirilayotgan mavzular aniqlanmadi. O'quvchilar materialni juda yaxshi o'zlashtirmoqda.\n\n💡 <b>Pedagogik tavsiya:</b> Dars tempini saqlab qoling va keyingi murakkabroq boblarga dadil o'tavering!`;
+    }
     
     content.innerHTML = "";
     let i = 0;
     
-    // Harfma-harf yozish funksiyasi
+    // Typewriter (Yozuv mashinkasi) effekti
     function typeWriter() {
       if (i < aiText.length) {
         if(aiText.charAt(i) === '\n') {
             content.innerHTML += "<br>";
+        } else if (aiText.substring(i, i+3) === '<b>') {
+            content.innerHTML += '<b>'; i+=2;
+        } else if (aiText.substring(i, i+4) === '</b>') {
+            content.innerHTML += '</b>'; i+=3;
+        } else if (aiText.substring(i, i+6) === '<code>') {
+            content.innerHTML += '<code style="background:var(--soft, #f4f5f7); padding:2px 6px; border-radius:4px; color:var(--ac, #6C2BD9); font-weight:bold;">'; i+=5;
+        } else if (aiText.substring(i, i+7) === '</code>') {
+            content.innerHTML += '</code>'; i+=6;
         } else {
             content.innerHTML += aiText.charAt(i);
         }
         i++;
-        setTimeout(typeWriter, 15); // Harflar chiqish tezligi
+        setTimeout(typeWriter, 15);
       }
     }
     typeWriter();
-  }, 1500); // 1.5 soniya "o'ylab turadi"
+  }, 1200);
 }
+
+// --- YAGONA PWA O'RNATISH MANTIQI (Tepa menyu + Footer + iOS) ---
+let deferredPrompt = null;
+
+function installPWA() {
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then((choice) => {
+      if (choice.outcome === 'accepted') hidePwaBtns();
+      deferredPrompt = null;
+    });
+  } else if (ios) {
+    if (typeof toastKorsat === 'function') {
+      toastKorsat("Safari’da «Ulashish» (Share) tugmasini bosing va «Bosh ekranga qo‘shish» ni tanlang 📲");
+    } else {
+      alert("Safari’da «Ulashish» tugmasini bosing, so‘ng «Bosh ekranga qo‘shish» ni tanlang.");
+    }
+  }
+}
+
+function hidePwaBtns() {
+  const topBtn = document.getElementById('install-btn');
+  const ftBtn = document.getElementById('pwaBtn');
+  if (topBtn) topBtn.style.display = 'none';
+  if (ftBtn) ftBtn.hidden = true;
+}
+
+(() => {
+  const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  if (standalone) return;
+
+  const topBtn = document.getElementById('install-btn');
+  const ftBtn = document.getElementById('pwaBtn');
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+
+  if (ios) {
+    if (topBtn) topBtn.style.display = 'block';
+    if (ftBtn) ftBtn.hidden = false;
+  }
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    if (topBtn) topBtn.style.display = 'block';
+    if (ftBtn) ftBtn.hidden = false;
+  });
+
+  if (ftBtn) ftBtn.addEventListener('click', installPWA);
+  window.addEventListener('appinstalled', hidePwaBtns);
+})();
